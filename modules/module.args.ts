@@ -800,7 +800,7 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
     type: 'string',
     usage: '${args}',
     default: {
-      default: 'eng'
+      default: 'en-US'
     },
     transformer: (val) => {
       const item = languages.find(a => a.code === val);
@@ -819,7 +819,7 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
     type: 'string',
     usage: '${args}',
     default: {
-      default: 'eng'
+      default: 'en-US'
     },
     transformer: (val) => {
       const item = languages.find(a => a.code === val);

@@ -296,7 +296,7 @@ function convert(css: Css, vtt: Vtt[]) {
   const stylesMap: Record<string, string> = {};
   let ass = [
     '\ufeff[Script Info]',
-    'Title: ' + relGroup,
+    'Title: [DKB Team]',
     'ScriptType: v4.00+',
     'WrapStyle: 0',
     'PlayResX: 1280',

@@ -216,7 +216,7 @@ class Merger {
           '--video-tracks 0',
           '--no-audio'
         );
-        const trackName = ((this.options.videoTitle ?? vid.lang.name) + (this.options.simul ? ' [Simulcast]' : ' [Uncut]'));
+        const trackName = ((this.options.videoTitle ?? vid.lang.name));
         args.push('--track-name', `0:"${trackName}"`);
         args.push(`--language 0:${vid.lang.code}`);
         hasVideo = true;
@@ -237,7 +237,7 @@ class Merger {
           `--video-tracks ${videoTrackNum}`,
           `--audio-tracks ${audioTrackNum}`
         );
-        const trackName = ((this.options.videoTitle ?? vid.lang.name) + (this.options.simul ? ' [Simulcast]' : ' [Uncut]'));
+        const trackName = ((this.options.videoTitle ?? vid.lang.name));
         args.push('--track-name', `0:"${trackName}"`);
         //args.push('--track-name', `1:"${trackName}"`);
         args.push(`--language ${audioTrackNum}:${vid.lang.code}`);
@@ -286,7 +286,7 @@ class Merger {
             `--sync 0:-${Math.ceil(subObj.delay*1000)}`
           );
         }
-        args.push('--track-name', `0:"${(subObj.language.language || subObj.language.name) + `${subObj.closedCaption === true ? ` ${this.options.ccTag}` : ''}` + `${subObj.signs === true ? ' Signs' : ''}`}"`);
+        args.push('--track-name', `0:"${(subObj.language.name) +" / "+(subObj.language.language) + `${subObj.closedCaption === true ? ` ${this.options.ccTag}` : ''}` + `${subObj.signs === true ? ' Signs' : ''}`}"`);
         args.push('--language', `0:"${subObj.language.code}"`);
         //TODO: look into making Closed Caption default if it's the only sub of the default language downloaded
         if (this.options.defaults.sub.code === subObj.language.code && !subObj.closedCaption) {
@@ -301,7 +301,6 @@ class Merger {
         '--no-subtitles',
       );
     }
-
     if (this.options.fonts && this.options.fonts.length > 0) {
       for (const f of this.options.fonts) {
         args.push('--attachment-name', f.name);
