@@ -7,10 +7,9 @@ import packageJson from './package.json';
 
 // plugins
 import { console } from './modules/log';
-import shlp from 'sei-helper';
 import m3u8 from 'm3u8-parsed';
 import streamdl, { M3U8Json } from './modules/hls-download';
-import { exec } from './modules/sei-helper-fixes';
+import Helper from './modules/module.helper';
 
 // custom modules
 import * as fontsData from './modules/module.fontsData';
@@ -95,8 +94,8 @@ export default class Crunchy implements ServiceClass {
     // select mode
     if (argv.silentAuth && !argv.auth) {
       await this.doAuth({
-        username: argv.username ?? await shlp.question('[Q] LOGIN/EMAIL'),
-        password: argv.password ?? await shlp.question('[Q] PASSWORD   ')
+        username: argv.username ?? await Helper.question('[Q] LOGIN/EMAIL: '),
+        password: argv.password ?? await Helper.question('[Q] PASSWORD: ')
       });
     }
     if(argv.dlFonts){
@@ -104,8 +103,8 @@ export default class Crunchy implements ServiceClass {
     }
     else if(argv.auth){
       await this.doAuth({
-        username: argv.username ?? await shlp.question('[Q] LOGIN/EMAIL'),
-        password: argv.password ?? await shlp.question('[Q] PASSWORD   ')
+        username: argv.username ?? await Helper.question('[Q] LOGIN/EMAIL: '),
+        password: argv.password ?? await Helper.question('[Q] PASSWORD: ')
       });
     }
     else if (argv.token) {
@@ -213,9 +212,7 @@ export default class Crunchy implements ServiceClass {
         }
         const fontUrl = fontsData.root + f;
         const getFont = await this.req.getData(fontUrl, {
-          headers: {
-            'User-Agent': api.defaultUserAgent
-          }
+          headers: api.crunchyDefHeader
         });
         if(getFont.ok && getFont.res){
           fs.writeFileSync(fontLoc, Buffer.from(await getFont.res.arrayBuffer()));
@@ -270,6 +267,10 @@ export default class Crunchy implements ServiceClass {
       console.error('Authentication failed!');
       return { isOk: false, reason: new Error('Authentication failed') };
     }
+    // To prevent any Cloudflare errors in the future
+    if (authReq.res.headers.get('Set-Cookie')) {
+      api.crunchyDefHeader['Cookie'] = authReq.res.headers.get('Set-Cookie') as string;
+    }
     this.token = await authReq.res.json();
     this.token.device_id = uuid;
     this.token.expires = new Date(Date.now() + this.token.expires_in);
@@ -297,6 +298,10 @@ export default class Crunchy implements ServiceClass {
     if(!authReq.ok || !authReq.res){
       console.error('Anonymous Authentication failed!');
       return;
+    }
+    // To prevent any Cloudflare errors in the future
+    if (authReq.res.headers.get('Set-Cookie')) {
+      api.crunchyDefHeader['Cookie'] = authReq.res.headers.get('Set-Cookie') as string;
     }
     this.token = await authReq.res.json();
     this.token.device_id = uuid;
@@ -358,6 +363,10 @@ export default class Crunchy implements ServiceClass {
       }
       return;
     }
+    // To prevent any Cloudflare errors in the future
+    if (authReq.res.headers.get('Set-Cookie')) {
+      api.crunchyDefHeader['Cookie'] = authReq.res.headers.get('Set-Cookie') as string;
+    }
     this.token = await authReq.res.json();
     this.token.device_id = uuid;
     this.token.expires = new Date(Date.now() + this.token.expires_in);
@@ -400,6 +409,10 @@ export default class Crunchy implements ServiceClass {
         }
         return;
       }
+      // To prevent any Cloudflare errors in the future
+      if (authReq.res.headers.get('Set-Cookie')) {
+        api.crunchyDefHeader['Cookie'] = authReq.res.headers.get('Set-Cookie') as string;
+      }
       this.token = await authReq.res.json();
       this.token.device_id = uuid;
       this.token.expires = new Date(Date.now() + this.token.expires_in);
@@ -428,7 +441,7 @@ export default class Crunchy implements ServiceClass {
     const cmsTokenReqOpts = {
       headers: {
         Authorization: `Bearer ${this.token.access_token}`,
-        'User-Agent': api.defaultUserAgent
+        ...api.crunchyDefHeader
       },
       useProxy: true
     };
@@ -481,7 +494,7 @@ export default class Crunchy implements ServiceClass {
     const searchReqOpts = {
       headers: {
         Authorization: `Bearer ${this.token.access_token}`,
-        'User-Agent': api.defaultUserAgent
+        ...api.crunchyDefHeader
       },
       useProxy: true
     };
@@ -612,7 +625,7 @@ export default class Crunchy implements ServiceClass {
 
     // set object booleans
     if(iMetadata.duration_ms){
-      oBooleans.push(shlp.formatTime(iMetadata.duration_ms/1000));
+      oBooleans.push(Helper.formatTime(iMetadata.duration_ms/1000));
     }
     if(iMetadata.is_simulcast) {
       oBooleans.push('SIMULCAST');
@@ -749,7 +762,7 @@ export default class Crunchy implements ServiceClass {
     const AuthHeaders = {
       headers: {
         Authorization: `Bearer ${this.token.access_token}`,
-        'User-Agent': api.defaultUserAgent
+        ...api.crunchyDefHeader
       },
       useProxy: true
     };
@@ -791,7 +804,7 @@ export default class Crunchy implements ServiceClass {
     const AuthHeaders = {
       headers: {
         Authorization: `Bearer ${this.token.access_token}`,
-        'User-Agent': api.defaultUserAgent
+        ...api.crunchyDefHeader
       },
       useProxy: true
     };
@@ -831,7 +844,7 @@ export default class Crunchy implements ServiceClass {
     const newlyAddedReqOpts = {
       headers: {
         Authorization: `Bearer ${this.token.access_token}`,
-        'User-Agent': api.defaultUserAgent
+        ...api.crunchyDefHeader
       },
       useProxy: true
     };
@@ -866,7 +879,7 @@ export default class Crunchy implements ServiceClass {
     const AuthHeaders = {
       headers: {
         Authorization: `Bearer ${this.token.access_token}`,
-        'User-Agent': api.defaultUserAgent
+        ...api.crunchyDefHeader
       },
       useProxy: true
     };
@@ -1103,7 +1116,7 @@ export default class Crunchy implements ServiceClass {
     const AuthHeaders = {
       headers: {
         Authorization: `Bearer ${this.token.access_token}`,
-        'User-Agent': api.defaultUserAgent
+        ...api.crunchyDefHeader
       },
       useProxy: true
     };
@@ -1280,12 +1293,7 @@ export default class Crunchy implements ServiceClass {
       const AuthHeaders: RequestInit = {
         headers: {
           Authorization: `Bearer ${this.token.access_token}`,
-          // 'X-Cr-Disable-Drm': 'true',
-          // 'X-Cr-Enable-Drm': 'false',
-          // 'X-Cr-Stream-Limits': 'false',
-          'User-Agent': api.defaultUserAgent
-          //'X-Cr-Segment-CDN': 'all',
-          //'User-Agent': 'Crunchyroll/1.8.0 Nintendo Switch/12.3.12.0 UE4/4.27'
+          ...api.crunchyDefHeader
         }
       };
 
@@ -1316,17 +1324,13 @@ export default class Crunchy implements ServiceClass {
       if (options.chapters) {
         //Make Chapter Request
         const chapterRequest = await this.req.getData(`https://static.crunchyroll.com/skip-events/production/${currentMediaId}.json`, {
-          headers: {
-            'User-Agent': api.defaultUserAgent
-          }
+          headers: api.crunchyDefHeader
         });
         if(!chapterRequest.ok || !chapterRequest.res){
         //Old Chapter Request Fallback
           console.warn('Chapter request failed, attempting old API');
           const oldChapterRequest = await this.req.getData(`https://static.crunchyroll.com/datalab-intro-v2/${currentMediaId}.json`, {
-            headers: {
-              'User-Agent': api.defaultUserAgent
-            }
+            headers: api.crunchyDefHeader
           });
           if(!oldChapterRequest.ok || !oldChapterRequest.res) {
             console.warn('Old Chapter API request failed');
@@ -1809,7 +1813,7 @@ export default class Crunchy implements ServiceClass {
                 await this.refreshToken(true, true);
                 encryptionKeysVideo = await getKeysWVD(chosenVideoSegments.pssh_wvd, api.drm_widevine, {
                   Authorization: `Bearer ${this.token.access_token}`,
-                  'User-Agent': api.defaultUserAgent,
+                  ...api.crunchyDefHeader,
                   Pragma: 'no-cache',
                   'Cache-Control': 'no-cache',
                   'content-type': 'application/octet-stream',
@@ -1822,7 +1826,7 @@ export default class Crunchy implements ServiceClass {
                   await this.refreshToken(true, true);
                   encryptionKeysAudio = await getKeysWVD(chosenAudioSegments.pssh_wvd, api.drm_widevine, {
                     Authorization: `Bearer ${this.token.access_token}`,
-                    'User-Agent': api.defaultUserAgent,
+                    ...api.crunchyDefHeader,
                     Pragma: 'no-cache',
                     'Cache-Control': 'no-cache',
                     'content-type': 'application/octet-stream',
@@ -1897,7 +1901,7 @@ export default class Crunchy implements ServiceClass {
 
                 if (videoDownloaded) {
                   console.info('Started decrypting video,', this.cfg.bin.shaka ? 'using shaka' : 'using mp4decrypt');
-                  const decryptVideo = exec(this.cfg.bin.shaka ? 'shaka-packager' : 'mp4decrypt', this.cfg.bin.shaka ? `"${this.cfg.bin.shaka}"` : `"${this.cfg.bin.mp4decrypt}"`, commandVideo);
+                  const decryptVideo = Helper.exec(this.cfg.bin.shaka ? 'shaka-packager' : 'mp4decrypt', this.cfg.bin.shaka ? `"${this.cfg.bin.shaka}"` : `"${this.cfg.bin.mp4decrypt}"`, commandVideo);
                   if (!decryptVideo.isOk) {
                     console.error(decryptVideo.err);
                     console.error(`Decryption failed with exit code ${decryptVideo.err.code}`);
@@ -1921,7 +1925,7 @@ export default class Crunchy implements ServiceClass {
 
                 if (audioDownloaded) {
                   console.info('Started decrypting audio,', this.cfg.bin.shaka ? 'using shaka' : 'using mp4decrypt');
-                  const decryptAudio = exec(this.cfg.bin.shaka ? 'shaka-packager' : 'mp4decrypt', this.cfg.bin.shaka ? `"${this.cfg.bin.shaka}"` : `"${this.cfg.bin.mp4decrypt}"`, commandAudio);
+                  const decryptAudio = Helper.exec(this.cfg.bin.shaka ? 'shaka-packager' : 'mp4decrypt', this.cfg.bin.shaka ? `"${this.cfg.bin.shaka}"` : `"${this.cfg.bin.mp4decrypt}"`, commandAudio);
                   if (!decryptAudio.isOk) {
                     console.error(decryptAudio.err);
                     console.error(`Decryption failed with exit code ${decryptAudio.err.code}`);
@@ -2067,9 +2071,7 @@ export default class Crunchy implements ServiceClass {
               const outFile = parseFileName(options.fileName + '.' + (mMeta.lang?.name || lang.name), variables, options.numbers, options.override).join(path.sep);
               console.info(`Output filename: ${outFile}`);
               const chunkPage = await this.req.getData(selPlUrl, {
-                headers: {
-                  'User-Agent': api.defaultUserAgent
-                }
+                headers: api.crunchyDefHeader,
               });
               if(!chunkPage.ok || !chunkPage.res){
                 console.error('CAN\'T FETCH VIDEO PLAYLIST!');
@@ -2219,9 +2221,7 @@ export default class Crunchy implements ServiceClass {
               continue;
             if(options.dlsubs.includes('all') || options.dlsubs.includes(langItem.locale)){
               const subsAssReq = await this.req.getData(subsItem.url, {
-                headers: {
-                  'User-Agent': api.defaultUserAgent
-                }
+                headers: api.crunchyDefHeader
               });
               if(subsAssReq.ok && subsAssReq.res){
                 let sBody = await subsAssReq.res.text();
@@ -2428,7 +2428,8 @@ export default class Crunchy implements ServiceClass {
 
     for (const key of Object.keys(sortedEpisodes)) {
       const item = sortedEpisodes[key];
-      console.info(`[${key}] [${item.items[0].upload_date ? new Date(item.items[0].upload_date).toISOString().slice(0, 10) : '0000-00-00'}] ${
+      const epNum = key.startsWith('E') ? (`E${data?.absolute ? (item.items[0].episode_number?.toString() || item.items[0].episode) : key.slice(1)}`) : key;
+      console.info(`[${data?.absolute ? epNum : key}] [${item.items[0].upload_date ? new Date(item.items[0].upload_date).toISOString().slice(0, 10) : '0000-00-00'}] ${
         item.items.find(a => !a.season_title.match(/\(\w+ Dub\)/))?.season_title ?? item.items[0].season_title.replace(/\(\w+ Dub\)/g, '').trimEnd()
       } - Season ${item.items[0].season_number} - ${item.items[0].title} [${
         item.items.map((a, index) => {
@@ -2444,8 +2445,14 @@ export default class Crunchy implements ServiceClass {
     return { data: sortedEpisodes, list: Object.entries(sortedEpisodes).map(([key, value]) => {
       const images = (value.items[0].images.thumbnail ?? [[ { source: '/notFound.png' } ]])[0];
       const seconds = Math.floor(value.items[0].duration_ms / 1000);
+      let epNum;
+      if (data?.absolute) {
+        epNum = value.items[0].episode_number !== null && value.items[0].episode_number !== undefined ? value.items[0].episode_number.toString() : (value.items[0].episode !== null && value.items[0].episode !== undefined ? value.items[0].episode : (key.startsWith('E') ? key.slice(1) : key));
+      } else {
+        epNum = key.startsWith('E') ? key.slice(1) : key;
+      }
       return {
-        e: key.startsWith('E') ? key.slice(1) : key,
+        e: epNum,
         lang: value.langs.map(a => a?.code),
         name: value.items[0].title,
         season: value.items[0].season_number.toString(),
@@ -2465,7 +2472,7 @@ export default class Crunchy implements ServiceClass {
     console.info('');
     console.info('-'.repeat(30));
     console.info('');
-    const selected = this.itemSelectMultiDub(episodes, data.dubLang, data.but, data.all, data.e);
+    const selected = this.itemSelectMultiDub(episodes, data.dubLang, data.but, data.all, data.e, data.absolute);
     for (const key of Object.keys(selected)) {
       const item = selected[key];
       console.info(`[S${item.season}E${item.episodeNumber}] - ${item.episodeTitle} [${
@@ -2480,7 +2487,7 @@ export default class Crunchy implements ServiceClass {
   public itemSelectMultiDub (eps: Record<string, {
     items: CrunchyEpisode[],
     langs: langsData.LanguageItem[]
-  }>, dubLang: string[], but?: boolean, all?: boolean, e?: string, ) {
+  }>, dubLang: string[], but?: boolean, all?: boolean, e?: string, absolute?: boolean) {
     const doEpsFilter = parseSelect(e as string);
 
     const ret: Record<string, CrunchyEpMeta> = {};
@@ -2501,7 +2508,13 @@ export default class Crunchy implements ServiceClass {
           item.series_title = 'NO_TITLE';
         }
 
-        const epNum = key.startsWith('E') ? key.slice(1) : key;
+        let epNum;
+        if (absolute) {
+          epNum = item.episode_number !== null && item.episode_number !== undefined ? item.episode_number.toString() : (item.episode !== null && item.episode !== undefined ? item.episode : (key.startsWith('E') ? key.slice(1) : key));
+        } else {
+          epNum = key.startsWith('E') ? key.slice(1) : key;
+        }
+
         // set data
         const images = (item.images.thumbnail ?? [[ { source: '/notFound.png' } ]])[0];
         const epMeta: CrunchyEpMeta = {
@@ -2535,7 +2548,7 @@ export default class Crunchy implements ServiceClass {
             item.playback = item.streams_link;
           }
         }
-        // find episode numbers
+
         if(item.playback && ((but && !doEpsFilter.isSelected([epNum, item.id])) || (all || (doEpsFilter.isSelected([epNum, item.id])) && !but))) {
           if (Object.prototype.hasOwnProperty.call(ret, key)) {
             const epMe = ret[key];
@@ -2594,7 +2607,7 @@ export default class Crunchy implements ServiceClass {
     const AuthHeaders = {
       headers: {
         Authorization: `Bearer ${this.token.access_token}`,
-        'User-Agent': api.defaultUserAgent
+        ...api.crunchyDefHeader
       },
       useProxy: true
     };
@@ -2623,7 +2636,7 @@ export default class Crunchy implements ServiceClass {
     const AuthHeaders = {
       headers: {
         Authorization: `Bearer ${this.token.access_token}`,
-        'User-Agent': api.defaultUserAgent
+        ...api.crunchyDefHeader
       },
       useProxy: true
     };
