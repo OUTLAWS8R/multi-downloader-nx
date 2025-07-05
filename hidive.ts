@@ -740,7 +740,7 @@ export default class Hidive implements ServiceClass {
     }
     for (const dubLang of options.dubLang as string[]) {
       if (audioByLanguage[dubLang]) {
-        let chosenAudioQuality = options.q === 0 ? audios.length : options.q;
+        let chosenAudioQuality = options.q === 0 ? audioByLanguage[dubLang].length : options.q;
         if(chosenAudioQuality > audioByLanguage[dubLang].length) {
           chosenAudioQuality = audioByLanguage[dubLang].length;
         }
@@ -748,6 +748,23 @@ export default class Hidive implements ServiceClass {
         chosenAudios.push(audioByLanguage[dubLang][chosenAudioQuality]);
       }
     }
+    
+    if (chosenAudios.length === 0 && audios.length > 0) {
+      const availableLangs = Object.keys(audioByLanguage);
+      if (availableLangs.length === 1) {
+        const fallbackLang = availableLangs[0];
+        console.warn(`Could not find a match for the selected audio language(s). Using the only available audio language ('${fallbackLang}') as a fallback.`);
+        const audiosForLang = audioByLanguage[fallbackLang];
+        
+        let chosenAudioQuality = options.q === 0 ? audiosForLang.length : options.q;
+        if (chosenAudioQuality > audiosForLang.length) {
+            chosenAudioQuality = audiosForLang.length;
+        }
+        chosenAudioQuality--;
+        chosenAudios.push(audiosForLang[chosenAudioQuality]);
+      }
+    }
+
     if (chosenAudios.length == 0) {
       console.error(`Chosen audio language(s) does not exist for episode ${selectedEpisode.episodeInformation.episodeNumber}`);
       return undefined;
