@@ -140,6 +140,18 @@ export default class Crunchy implements ServiceClass {
       await this.refreshToken();
       await this.logMovieListingById(argv['movie-listing'] as string);
     }
+    else if(argv['show-raw'] && argv['show-raw'].match(/^[0-9A-Z]{9}$/)){
+      await this.refreshToken();
+      await this.logShowRawById(argv['show-raw'] as string);
+    }
+    else if(argv['season-raw'] && argv['season-raw'].match(/^[0-9A-Z]{9}$/)){
+      await this.refreshToken();
+      await this.logSeasonRawById(argv['season-raw'] as string);
+    }
+    else if(argv['show-list-raw']){
+      await this.refreshToken();
+      await this.logShowListRaw();
+    }
     else if(argv.s && argv.s.match(/^[0-9A-Z]{9}$/)){
       await this.refreshToken();
       if (argv.dubLang.length > 1) {
@@ -189,6 +201,173 @@ export default class Crunchy implements ServiceClass {
     else{
       console.info('No option selected or invalid value entered. Try --help.');
     }
+  }
+
+  public async logShowRawById(id: string){
+    // check token
+    if(!this.cmsToken.cms){
+      console.error('Authentication required!');
+      return;
+    }
+    // opts
+    const AuthHeaders = {
+      headers: {
+        Authorization: `Bearer ${this.token.access_token}`,
+        ...api.crunchyDefHeader
+      },
+      useProxy: true
+    };
+    // seasons list
+    const seriesSeasonListReq = await this.req.getData(`${api.cms}/series/${id}/seasons?force_locale=&preferred_audio_language=ja-JP&locale=${this.locale}`, AuthHeaders);
+    if(!seriesSeasonListReq.ok || !seriesSeasonListReq.res){
+      console.error('Series Request FAILED!');
+      return;
+    }
+    const seriesData = await seriesSeasonListReq.res.json();
+    for (const item of seriesData.data) {
+      // stringify each object, then a newline
+      console.log(JSON.stringify(item));
+    }
+    return seriesData.data;
+  }
+
+
+  public async logSeasonRawById(id: string){
+    // check token
+    if(!this.cmsToken.cms){
+      console.error('Authentication required!');
+      return;
+    }
+    // opts
+    const AuthHeaders = {
+      headers: {
+        Authorization: `Bearer ${this.token.access_token}`,
+        ...api.crunchyDefHeader
+      },
+      useProxy: true
+    };
+    // seasons list
+    let episodeList = { total: 0, data: [], meta: {} } as CrunchyEpisodeList;
+    //get episode info
+    if (this.api == 'android') {
+      const reqEpsListOpts = [
+        api.beta_cms,
+        this.cmsToken.cms.bucket,
+        '/episodes?',
+        new URLSearchParams({
+          'force_locale': '',
+          'preferred_audio_language': 'ja-JP',
+          'locale': this.locale,
+          'season_id': id,
+          'Policy': this.cmsToken.cms.policy,
+          'Signature': this.cmsToken.cms.signature,
+          'Key-Pair-Id': this.cmsToken.cms.key_pair_id,
+        }),
+      ].join('');
+      const reqEpsList = await this.req.getData(reqEpsListOpts, AuthHeaders);
+      if(!reqEpsList.ok || !reqEpsList.res){
+        console.error('Episode List Request FAILED!');
+        return { isOk: false, reason: new Error('Episode List request failed. No more information provided.') };
+      }
+      //CrunchyEpisodeList
+      const episodeListAndroid = await reqEpsList.res.json() as CrunchyAndroidEpisodes;
+      episodeList = {
+        total: episodeListAndroid.total,
+        data: episodeListAndroid.items,
+        meta: {}
+      };
+    } else {
+      const reqEpsList = await this.req.getData(`${api.cms}/seasons/${id}/episodes?force_locale=&preferred_audio_language=ja-JP&locale=${this.locale}`, AuthHeaders);
+      if(!reqEpsList.ok || !reqEpsList.res){
+        console.error('Episode List Request FAILED!');
+        return { isOk: false, reason: new Error('Episode List request failed. No more information provided.') };
+      }
+      //CrunchyEpisodeList
+      episodeList = await reqEpsList.res.json() as CrunchyEpisodeList;
+
+
+    }
+    for (const item of episodeList.data) {
+      // stringify each object, then a newline
+      console.log(JSON.stringify(item));
+    }
+
+    // Return the data directly if this function is called by other code
+    return episodeList.data;
+  }
+
+  public async logShowListRaw() {
+    // check token
+    if(!this.cmsToken.cms){
+      console.error('Authentication required!');
+      return;
+    }
+
+    // opts
+    const AuthHeaders = {
+      headers: {
+        Authorization: `Bearer ${this.token.access_token}`,
+        ...api.crunchyDefHeader
+      },
+      useProxy: true
+    };
+
+    const allShows: any[] = [];
+    let page = 1;
+    let hasMorePages = true;
+
+    if(this.debug){
+      console.info('Retrieving complete show list...');
+    }
+
+    while (hasMorePages) {
+      const searchStart = (page - 1) * 50;
+      const params = new URLSearchParams({
+        'preferred_audio_language': 'ja-JP',
+        'locale': this.locale,
+        'ratings': 'true',
+        'sort_by': 'alphabetical',
+        'n': '50',
+        'start': searchStart.toString()
+      }).toString();
+
+      const showListReq = await this.req.getData(`${api.browse_all_series}?${params}`, AuthHeaders);
+
+      if (!showListReq.ok || !showListReq.res) {
+        console.error(`Show List Request FAILED on page ${page}!`);
+        return allShows;
+      }
+
+      const showListData = await showListReq.res.json();
+
+      // Add current page data
+      for (const item of showListData.data) {
+        // stringify each object, then a newline
+        console.log(JSON.stringify(item));
+        allShows.push(item);
+      }
+
+      // Calculate pagination info
+      const totalItems = showListData.total;
+      const totalPages = Math.ceil(totalItems / 50);
+      if(this.debug){
+        console.info(`Retrieved page ${page}/${totalPages} (${allShows.length}/${totalItems} items)`);
+      }
+
+      // Check if we need to fetch more pages
+      if (page >= totalPages) {
+        hasMorePages = false;
+      } else {
+        page++;
+        // Add a small delay to avoid rate limiting
+        await this.sleep(1000);
+      }
+    }
+
+    if(this.debug){
+      console.info(`Complete show list retrieved: ${allShows.length} items`);
+    }
+    return allShows;
   }
 
   public async getFonts() {
@@ -1379,12 +1558,12 @@ export default class Crunchy implements ServiceClass {
             if (chapterData.startTime > 1) {
               compiledChapters.push(
                 `CHAPTER${(compiledChapters.length/2)+1}=00:00:00.00`,
-                `CHAPTER${(compiledChapters.length/2)+1}NAME=Prologue`
+                `CHAPTER${(compiledChapters.length/2)+1}NAME=Episode`
               );
             }
             compiledChapters.push(
               `CHAPTER${(compiledChapters.length/2)+1}=${startFormatted}`,
-              `CHAPTER${(compiledChapters.length/2)+1}NAME=Opening`
+              `CHAPTER${(compiledChapters.length/2)+1}NAME=Intro`
             );
             compiledChapters.push(
               `CHAPTER${(compiledChapters.length/2)+1}=${endFormatted}`,
@@ -1407,7 +1586,8 @@ export default class Crunchy implements ServiceClass {
           if (chapters.length > 0) {
             chapters.sort((a, b) => a.start - b.start);
             //Check if chapters has an intro
-            if (!(chapters.find(c => c.type === 'intro') || chapters.find(c => c.type === 'recap'))) {
+            //if (!(chapters.find(c => c.type === 'intro') || chapters.find(c => c.type === 'recap'))) {
+            if (!(chapters.find(c => c.type === 'intro'))) {
               compiledChapters.push(
                 `CHAPTER${(compiledChapters.length/2)+1}=00:00:00.00`,
                 `CHAPTER${(compiledChapters.length/2)+1}NAME=Episode`
@@ -1423,32 +1603,52 @@ export default class Crunchy implements ServiceClass {
               endTime.setSeconds(chapter.end);
               const startFormatted = startTime.toISOString().substring(11, 19)+'.00';
               const endFormatted = endTime.toISOString().substring(11, 19)+'.00';
-            
+              //Find the max start time from the chapters
+              const maxStart = Math.max(
+                ...chapters
+                  .map(obj => obj.start)
+                  .filter((start): start is number => start !== null && start !== undefined)
+              );
+              //We need the duration of the ep
+              let epDuration: number | undefined;
+              const epiMeta = await this.req.getData(`${api.cms}/objects/${currentMediaId}?force_locale=&preferred_audio_language=ja-JP&locale=${this.locale}`, AuthHeaders);
+              if(!epiMeta.ok || !epiMeta.res){
+                epDuration = 7200;
+              } else {
+                epDuration = Math.floor((await epiMeta.res.json()).data[0].episode_metadata.duration_ms / 1000 - 3);
+              }
+
               //Push generated chapters
               if (chapter.type == 'intro') {
                 if (chapter.start > 0) {
                   compiledChapters.push(
                     `CHAPTER${(compiledChapters.length/2)+1}=00:00:00.00`,
-                    `CHAPTER${(compiledChapters.length/2)+1}NAME=Prologue`
+                    `CHAPTER${(compiledChapters.length/2)+1}NAME=Episode`
                   );
                 }
                 compiledChapters.push(
                   `CHAPTER${(compiledChapters.length/2)+1}=${startFormatted}`,
-                  `CHAPTER${(compiledChapters.length/2)+1}NAME=Opening`
+                  `CHAPTER${(compiledChapters.length/2)+1}NAME=${chapter.type.charAt(0).toUpperCase() + chapter.type.slice(1)}`
                 );
-                compiledChapters.push(
-                  `CHAPTER${(compiledChapters.length/2)+1}=${endFormatted}`,
-                  `CHAPTER${(compiledChapters.length/2)+1}NAME=Episode`
-                );
+                if (chapter.end < epDuration && chapter.end != maxStart) {
+                  compiledChapters.push(
+                    `CHAPTER${(compiledChapters.length/2)+1}=${endFormatted}`,
+                    `CHAPTER${(compiledChapters.length/2)+1}NAME=Episode`
+                  );
+                }
               } else {
-                compiledChapters.push(
-                  `CHAPTER${(compiledChapters.length/2)+1}=${startFormatted}`,
-                  `CHAPTER${(compiledChapters.length/2)+1}NAME=${chapter.type.charAt(0).toUpperCase() + chapter.type.slice(1)} Start`
-                );
-                compiledChapters.push(
-                  `CHAPTER${(compiledChapters.length/2)+1}=${endFormatted}`,
-                  `CHAPTER${(compiledChapters.length/2)+1}NAME=${chapter.type.charAt(0).toUpperCase() + chapter.type.slice(1)} End`
-                );
+                if (chapter.type !== 'recap') {
+                  compiledChapters.push(
+                    `CHAPTER${(compiledChapters.length/2)+1}=${startFormatted}`,
+                    `CHAPTER${(compiledChapters.length/2)+1}NAME=${chapter.type.charAt(0).toUpperCase() + chapter.type.slice(1)}`
+                  );
+                  if (chapter.end < epDuration && chapter.end != maxStart) {
+                    compiledChapters.push(
+                      `CHAPTER${(compiledChapters.length/2)+1}=${endFormatted}`,
+                      `CHAPTER${(compiledChapters.length/2)+1}NAME=Episode`
+                    );
+                  }
+                }
               }
             }
           }
@@ -1618,10 +1818,10 @@ export default class Crunchy implements ServiceClass {
 
       // Delete the stream if it's not needed
       if (options.novids && options.noaudio) {
-        // if (playStream) {
-        //   await this.refreshToken(true, true);
-        //   await this.req.getData(`https://cr-play-service.prd.crunchyrollsvc.com/v1/token/${currentVersion ? currentVersion.guid : currentMediaId}/${playStream.token}`, {...{method: 'DELETE'}, ...AuthHeaders});
-        // }
+        if (playStream) {
+          await this.refreshToken(true, true);
+          await this.req.getData(`https://cr-play-service.prd.crunchyrollsvc.com/v1/token/${currentVersion ? currentVersion.guid : currentMediaId}/${playStream.token}`, {...{method: 'DELETE'}, ...AuthHeaders});
+        }
       }
 
       if(!dlFailed && curStream !== undefined && !(options.novids && options.noaudio)){
@@ -1632,12 +1832,6 @@ export default class Crunchy implements ServiceClass {
         } else {
           const streamPlaylistBody = await streamPlaylistsReq.res.text();
           if (streamPlaylistBody.match('MPD')) {
-            //We have the stream, so go ahead and delete the active stream
-            // if (playStream) {
-            //   await this.refreshToken(true, true);
-            //   await this.req.getData(`https://cr-play-service.prd.crunchyrollsvc.com/v1/token/${currentVersion ? currentVersion.guid : currentMediaId}/${playStream.token}`, {...{method: 'DELETE'}, ...AuthHeaders});
-            // }
-
             //Parse MPD Playlists
             const streamPlaylists = await parse(streamPlaylistBody, langsData.findLang(langsData.fixLanguageTag(pbData.meta.audio_locale as string) || ''), curStream.url.match(/.*\.urlset\//)[0]);
 
@@ -1864,6 +2058,11 @@ export default class Crunchy implements ServiceClass {
                 } else {
                   encryptionKeysAudio = encryptionKeysVideo;
                 }
+              }
+
+              if (playStream) {
+                await this.refreshToken(true, true);
+                await this.req.getData(`https://cr-play-service.prd.crunchyrollsvc.com/v1/token/${currentVersion ? currentVersion.guid : currentMediaId}/${playStream.token}`, {...{method: 'DELETE'}, ...AuthHeaders});
               }
 
               // New Crunchyroll DRM endpoint for Playready (currently broken on Crunchyrolls part and therefore disabled)
@@ -2106,10 +2305,10 @@ export default class Crunchy implements ServiceClass {
                 dlFailed = true;
               } else {
                 // We have the stream, so go ahead and delete the active stream
-                // if (playStream) {
-                //   await this.refreshToken(true, true);
-                //   await this.req.getData(`https://cr-play-service.prd.crunchyrollsvc.com/v1/token/${currentVersion ? currentVersion.guid : currentMediaId}/${playStream.token}`, {...{method: 'DELETE'}, ...AuthHeaders});
-                // }
+                if (playStream) {
+                  await this.refreshToken(true, true);
+                  await this.req.getData(`https://cr-play-service.prd.crunchyrollsvc.com/v1/token/${currentVersion ? currentVersion.guid : currentMediaId}/${playStream.token}`, {...{method: 'DELETE'}, ...AuthHeaders});
+                }
 
                 const chunkPageBody = await chunkPage.res.text();
                 const chunkPlaylist = m3u8(chunkPageBody);

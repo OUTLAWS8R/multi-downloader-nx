@@ -145,6 +145,36 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
     usage: '${ID}',
   },
   {
+    group: 'dl',
+    alias: 'sraw',
+    name: 'show-raw',
+    describe: 'Get Raw Show data',
+    docDescribe: true,
+    service: ['crunchy'],
+    type: 'string',
+    usage: '${ID}',
+  },
+  {
+    group: 'dl',
+    alias: 'seraw',
+    name: 'season-raw',
+    describe: 'Get Raw Season data',
+    docDescribe: true,
+    service: ['crunchy'],
+    type: 'string',
+    usage: '${ID}',
+  },
+  {
+    group: 'dl',
+    alias: 'slraw',
+    name: 'show-list-raw',
+    describe: 'Get Raw Show list data',
+    docDescribe: true,
+    service: ['crunchy'],
+    type: 'boolean',
+    usage: '',
+  },
+  {
     name: 'series',
     group: 'dl',
     alias: 'srz',
@@ -219,8 +249,7 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
     type: 'boolean',
     group: 'dl',
     service: ['crunchy', 'adn'],
-    docDescribe: 'Will fetch the chapters and add them into the final video.' 
-     + '\nCurrently only works with mkvmerge.',
+    docDescribe: 'Will fetch the chapters and add them into the final video.',
     usage: '',
     default: {
       default: true
@@ -299,10 +328,10 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
     alias: 'cs',
     service: ['crunchy'],
     type: 'string',
-    describe: 'Select specific crunchy play stream by device, or disable stream with "none"',
+    describe: 'Select a specific Crunchyroll playback endpoint by device, or disable the stream using "none". Since Crunchyroll has started rolling out their new VBR encodes, we highly recommend using a TV endpoint (e.g. vidaa, samsungtv, lgtv, rokutv, chromecast, firetv, androidtv) to access the old CBR encodes. Please note: The older encodes do not include the new 192 kbps audio, the new audio is only available with the new VBR encodes.',
     choices: [...Object.keys(CrunchyPlayStreams), 'none'],
     default: {
-      default: 'vidaa'
+      default: 'lgtv'
     },
     docDescribe: true,
     usage: '${device}'

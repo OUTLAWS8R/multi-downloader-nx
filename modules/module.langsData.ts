@@ -36,6 +36,7 @@ const languages: LanguageItem[] = [
   { cr_locale: 'vi-VN',  locale: 'vi-VN',  code: 'vi-VN',   name: 'Vietnamese',                language: 'Tiếng Việt', },
   { cr_locale: 'id-ID',  locale: 'id-ID',  code: 'id-ID',   name: 'Indonesian',                language: 'Bahasa Indonesia', },
   { cr_locale: 'te-IN',  locale: 'te-IN',  code: 'te-IN',   name: 'Telugu (India)',            language: 'తెలుగు' },
+  { locale: 'zh', code: 'cmn', name: 'Chinese (Mandarin, PRC)' },
   { cr_locale: 'zh-CN',  locale: 'zh-CN',  code: 'zh-CN',   name: 'Chinese (Mainland China)',  language: '正體字',                            },
   { cr_locale: 'zh-HK',  locale: 'zh-HK',  code: 'zh-HK',   name: 'Chinese (Hong-Kong)',       language: '中文 (粵語)',                            },
   { cr_locale: 'zh-TW',  locale: 'zh-TW',  code: 'zh-TW',   name: 'Chinese (Taiwan)',          language: '中文 (國語)',                            },
