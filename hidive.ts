@@ -55,13 +55,6 @@ export default class Hidive implements ServiceClass {
     if (argv.debug)
       this.debug = true;
 
-    //below is for quickly testing API calls
-    /*const apiTest = await this.apiReq('/v4/season/18871', '', 'auth', 'GET');
-      if(!apiTest.ok || !apiTest.res){return;}
-      console.info(apiTest.res.body);
-      fs.writeFileSync('apitest.json', JSON.stringify(JSON.parse(apiTest.res.body), null, 2));
-      return console.info('test done');*/
-
     // load binaries
     this.cfg.bin = await yamlCfg.loadBinCfg();
     if (argv.allDubs) {
@@ -321,12 +314,6 @@ export default class Hidive implements ServiceClass {
     return { isOk: true, value: seriesData };
   }
 
-  /**
-   * Function to get the season data from the API
-   * @param id ID of the season
-   * @param lastSeen Last episode ID seen, used for paging
-   * @returns 
-   */
   public async getSeason(id: number, lastSeen?: number) {
     const getSeasonData = await this.apiReq(`/v4/season/${id}?rpp=20${lastSeen ? '&lastSeen='+lastSeen : ''}`, '', 'auth', 'GET');
     if (!getSeasonData.ok || !getSeasonData.res) { 
@@ -369,7 +356,6 @@ export default class Hidive implements ServiceClass {
           episode.episodeInformation.episodeNumber = parseFloat(episode.title.split(' - ')[0].replace('E', ''));
           episode.title = episode.title.split(' - ')[1];
         }
-        //S${episode.episodeInformation.seasonNumber}E${episode.episodeInformation.episodeNumber} - 
         if (!datePattern.test(episode.title) && episode.duration !== 10) {
           episodes.push(episode);
         }
@@ -400,7 +386,6 @@ export default class Hidive implements ServiceClass {
         episode.episodeInformation.episodeNumber = parseFloat(episode.title.split(' - ')[0].replace('E', ''));
         episode.title = episode.title.split(' - ')[1];
       }
-      //S${episode.episodeInformation.seasonNumber}E${episode.episodeInformation.episodeNumber} - 
       if (!datePattern.test(episode.title) && episode.duration !== 10) {
         episodes.push(episode);
       }
@@ -410,14 +395,6 @@ export default class Hidive implements ServiceClass {
     return { isOk: true, value: episodes, series: series };
   }
 
-  /**
-   * Lists the requested series, and returns the selected episodes
-   * @param id Series ID
-   * @param e Selector
-   * @param but Download all but selected videos
-   * @param all Whether to download all available videos
-   * @returns 
-   */
   public async selectSeries(id: number, e: string | undefined, but: boolean, all: boolean) {
     const getShowData = await this.listSeries(id);
     if (!getShowData.isOk || !getShowData.value) {
@@ -431,7 +408,6 @@ export default class Hidive implements ServiceClass {
     const selEpsArr: NewHidiveEpisodeExtra[] = [];
     let ovaSeq = 1;
     let movieSeq = 1;
-    // Add an absolute episode counter
     let absoluteEpisodeNumber = 1;
 
     for (let i = 0; i < showData.length; i++) {
@@ -448,18 +424,10 @@ export default class Hidive implements ServiceClass {
         nameLong = 'movie' + (('0' + movieSeq).slice(-2));
         movieSeq++;
       }
-
-      // Create an array of all possible identifiers for this episode
-      const perSeasonEpisodeNumber = parseFloat(currentEpisode.episodeInformation.episodeNumber + '');
-      const episodeId = currentEpisode.id + '';
-      const identifiers = [
-          absoluteEpisodeNumber.toString(),  // The new absolute number (e.g., "14")
-          perSeasonEpisodeNumber.toString(), // The old per-season number (e.g., "1")
-          episodeId                          // The unique API ID for the episode
-      ];
+      const identifiers = [ absoluteEpisodeNumber.toString() ];
       
       let selMark = '';
-      // Check if the episode is selected using any of its identifiers
+      // Check if the episode is selected using ONLY its absolute ID
       if (all ||
         (but && !doEpsFilter.isSelected(identifiers)) ||
         (!but && doEpsFilter.isSelected(identifiers))
@@ -468,7 +436,6 @@ export default class Hidive implements ServiceClass {
         selMark = '✓ ';
       }
       
-      // Update the console output to show the new absolute episode number
       console.info('%s[#%s / S%sE%s] %s',
         selMark,
         absoluteEpisodeNumber.toString().padStart(2, '0'), // Show absolute number (e.g., #14)
@@ -484,15 +451,6 @@ export default class Hidive implements ServiceClass {
     return { isOk: true, value: selEpsArr, showData: getShowData.series };
   }
 
-
-  /**
-   * Lists the requested season, and returns the selected episodes
-   * @param id Season ID
-   * @param e Selector
-   * @param but Download all but selected videos
-   * @param all Whether to download all available videos
-   * @returns 
-   */
   public async selectSeason(id: number, e: string | undefined, but: boolean, all: boolean) {
     const getShowData = await this.listSeason(id);
     if (!getShowData.isOk || !getShowData.value) {
