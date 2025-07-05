@@ -425,34 +425,65 @@ export default class Hidive implements ServiceClass {
     }
     const showData = getShowData.value;
     const doEpsFilter = parseSelect(e as string);
-    // build selected episodes
-    const selEpsArr: NewHidiveEpisodeExtra[] = []; let ovaSeq = 1; let movieSeq = 1;
+
+    console.info('\nFull Episode List (Use # for selection with -e):');
+    
+    const selEpsArr: NewHidiveEpisodeExtra[] = [];
+    let ovaSeq = 1;
+    let movieSeq = 1;
+    // Add an absolute episode counter
+    let absoluteEpisodeNumber = 1;
+
     for (let i = 0; i < showData.length; i++) {
-      const titleId = showData[i].id;
+      const currentEpisode = showData[i];
+      const titleId = currentEpisode.id;
       const seriesTitle = getShowData.series.title;
-      const seasonTitle = getShowData.series.seasons[showData[i].episodeInformation.seasonNumber-1]?.title ?? seriesTitle;
-      let nameLong = showData[i].title;
+      const seasonTitle = getShowData.series.seasons[currentEpisode.episodeInformation.seasonNumber-1]?.title ?? seriesTitle;
+      
+      let nameLong = currentEpisode.title;
       if (nameLong.match(/OVA/i)) {
-        nameLong = 'ova' + (('0' + ovaSeq).slice(-2)); ovaSeq++;
+        nameLong = 'ova' + (('0' + ovaSeq).slice(-2));
+        ovaSeq++;
       } else if (nameLong.match(/Theatrical/i)) {
-        nameLong = 'movie' + (('0' + movieSeq).slice(-2)); movieSeq++;
+        nameLong = 'movie' + (('0' + movieSeq).slice(-2));
+        movieSeq++;
       }
+
+      // Create an array of all possible identifiers for this episode
+      const perSeasonEpisodeNumber = parseFloat(currentEpisode.episodeInformation.episodeNumber + '');
+      const episodeId = currentEpisode.id + '';
+      const identifiers = [
+          absoluteEpisodeNumber.toString(),  // The new absolute number (e.g., "14")
+          perSeasonEpisodeNumber.toString(), // The old per-season number (e.g., "1")
+          episodeId                          // The unique API ID for the episode
+      ];
+      
       let selMark = '';
-      if (all || 
-      but && !doEpsFilter.isSelected([parseFloat(showData[i].episodeInformation.episodeNumber+'')+'', showData[i].id+'']) || 
-      !but && doEpsFilter.isSelected([parseFloat(showData[i].episodeInformation.episodeNumber+'')+'', showData[i].id+''])
+      // Check if the episode is selected using any of its identifiers
+      if (all ||
+        (but && !doEpsFilter.isSelected(identifiers)) ||
+        (!but && doEpsFilter.isSelected(identifiers))
       ) {
-        selEpsArr.push({ isSelected: true, titleId, nameLong, seasonTitle, seriesTitle, ...showData[i] });
+        selEpsArr.push({ isSelected: true, titleId, nameLong, seasonTitle, seriesTitle, ...currentEpisode });
         selMark = '✓ ';
       }
-      console.info('%s[%s] %s',
+      
+      // Update the console output to show the new absolute episode number
+      console.info('%s[#%s / S%sE%s] %s',
         selMark,
-        'S'+parseFloat(showData[i].episodeInformation.seasonNumber+'')+'E'+parseFloat(showData[i].episodeInformation.episodeNumber+''),
-        showData[i].title,
+        absoluteEpisodeNumber.toString().padStart(2, '0'), // Show absolute number (e.g., #14)
+        currentEpisode.episodeInformation.seasonNumber,
+        currentEpisode.episodeInformation.episodeNumber,
+        currentEpisode.title,
       );
+
+      // Increment the counter for the next episode
+      absoluteEpisodeNumber++;
     }
+ 
     return { isOk: true, value: selEpsArr, showData: getShowData.series };
   }
+
 
   /**
    * Lists the requested season, and returns the selected episodes
