@@ -208,7 +208,7 @@ class Merger {
     return _default;
   };
 
-  public MkvMerge = () => {
+ public MkvMerge = () => {
     const args: string[] = [];
 
     let hasVideo = false;
