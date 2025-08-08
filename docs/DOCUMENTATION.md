@@ -1,4 +1,4 @@
-# multi-downloader-nx (v5.4.8)
+# multi-downloader-nx (v5.5.2)
 
 If you find any bugs in this documentation or in the program itself please report it [over on GitHub](https://github.com/anidl/multi-downloader-nx/issues).
 
@@ -171,13 +171,6 @@ This will speed up the download speed, if multiple languages are selected.
 | Crunchyroll, AnimationDigitalNetwork | `--chapters ` | `boolean` | `No`| `NaN` | `true`| `chapters: ` |
 
 Will fetch the chapters and add them into the final video.
-#### `--crapi`
-| **Service** | **Usage** | **Type** | **Required** | **Alias** | **Choices** | **Default** |**cli-default Entry**
-| --- | --- | --- | --- | --- | --- | --- | ---| 
-| Crunchyroll | `--crapi ` | `string` | `No`| `NaN` | [`android`, `web`] | `web`| `crapi: ` |
-
-If set to Android, it has lower quality, but Non-DRM streams,
-If set to Web, it has a higher quality adaptive stream, but everything is DRM.
 #### `--removeBumpers`
 | **Service** | **Usage** | **Type** | **Required** | **Alias** |  **Default** |**cli-default Entry**
 | --- | --- | --- | --- | --- | --- | ---| 
@@ -194,21 +187,33 @@ If selected, it will prefer to keep the original Font Size defined by the servic
 #### `-x`
 | **Service** | **Usage** | **Type** | **Required** | **Alias** | **Choices** | **Default** |**cli-default Entry**
 | --- | --- | --- | --- | --- | --- | --- | ---| 
-| Crunchyroll | `-x ${server}` | `number` | `No`| `--server` | [`1`, `2`, `3`, `4`] | `1`| `x: ` |
+| All | `-x ${server}` | `number` | `No`| `--server` | [`1`, `2`, `3`, `4`] | `1`| `x: ` |
 
 Select the server to use
-#### `--kstream`
-| **Service** | **Usage** | **Type** | **Required** | **Alias** | **Choices** | **Default** |**cli-default Entry**
-| --- | --- | --- | --- | --- | --- | --- | ---| 
-| Crunchyroll | `--kstream ${stream}` | `number` | `No`| `-k` | [`1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`, `10`] | `1`| `kstream: ` |
-
-Select specific stream
 #### `--cstream`
+| **Service** | **Usage** | **Type** | **Required** | **Alias** | **Choices** | **cli-default Entry**
+| --- | --- | --- | --- | --- | --- | ---| 
+| Crunchyroll | `--cstream ${device}` | `string` | `No`| `--cs` | [`chrome`, `firefox`, `safari`, `edge`, `fallback`, `ps4`, `ps5`, `switch`, `xboxone`, `vidaa`, `samsungtv`, `lgtv`, `rokutv`, `chromecast`, `firetv`, `androidtv`, `android`, `androidtab`, `none`] | `NaN` |
+
+(Please use --vstream and --astream instead, this will deprecate soon) Select a specific Crunchyroll playback endpoint by device. Since Crunchyroll has started rolling out their new VBR encodes, we highly recommend using a TV endpoint (e.g. vidaa, samsungtv, lgtv, rokutv, chromecast, firetv, androidtv) to access the old CBR encodes. Please note: The older encodes do not include the new 192 kbps audio, the new audio is only available with the new VBR encodes.
+#### `--vstream`
 | **Service** | **Usage** | **Type** | **Required** | **Alias** | **Choices** | **Default** |**cli-default Entry**
 | --- | --- | --- | --- | --- | --- | --- | ---| 
-| Crunchyroll | `--cstream ${device}` | `string` | `No`| `--cs` | [`chrome`, `firefox`, `safari`, `edge`, `fallback`, `ps4`, `ps5`, `switch`, `xboxone`, `vidaa`, `samsungtv`, `lgtv`, `rokutv`, `chromecast`, `firetv`, `androidtv`, `android`, `androidtab`, `none`] | `lgtv`| `cstream: ` |
+| Crunchyroll | `--vstream ${device}` | `string` | `No`| `--vs` | [`chrome`, `firefox`, `safari`, `edge`, `fallback`, `ps4`, `ps5`, `switch`, `xboxone`, `vidaa`, `samsungtv`, `lgtv`, `rokutv`, `chromecast`, `firetv`, `androidtv`, `android`, `androidtab`, `none`] | `lgtv`| `vstream: ` |
 
-Select a specific Crunchyroll playback endpoint by device, or disable the stream using "none". Since Crunchyroll has started rolling out their new VBR encodes, we highly recommend using a TV endpoint (e.g. vidaa, samsungtv, lgtv, rokutv, chromecast, firetv, androidtv) to access the old CBR encodes. Please note: The older encodes do not include the new 192 kbps audio, the new audio is only available with the new VBR encodes.
+Select a specific Crunchyroll video playback endpoint by device.
+#### `--astream`
+| **Service** | **Usage** | **Type** | **Required** | **Alias** | **Choices** | **Default** |**cli-default Entry**
+| --- | --- | --- | --- | --- | --- | --- | ---| 
+| Crunchyroll | `--astream ${device}` | `string` | `No`| `--as` | [`chrome`, `firefox`, `safari`, `edge`, `fallback`, `ps4`, `ps5`, `switch`, `xboxone`, `vidaa`, `samsungtv`, `lgtv`, `rokutv`, `chromecast`, `firetv`, `androidtv`, `android`, `androidtab`, `none`] | `firefox`| `astream: ` |
+
+Select a specific Crunchyroll audio playback endpoint by device.
+#### `--tsd`
+| **Service** | **Usage** | **Type** | **Required** | **Alias** |  **Default** |**cli-default Entry**
+| --- | --- | --- | --- | --- | --- | ---| 
+| Crunchyroll | `--tsd ` | `boolean` | `No`| `NaN` | `false`| `tsd: ` |
+
+(Total Session Death) Kills all active Crunchyroll Streaming Sessions to prevent getting the "TOO_MANY_ACTIVE_STREAMS" error.
 #### `--hslang`
 | **Service** | **Usage** | **Type** | **Required** | **Alias** | **Choices** | **Default** |**cli-default Entry**
 | --- | --- | --- | --- | --- | --- | --- | ---| 
@@ -466,6 +471,18 @@ Force the tool to check for updates (code version only)
 | All | `--skipUpdate ` | `boolean` | `No`| `NaN` | `false`| `skipUpdate: ` |
 
 If true, the tool won't check for updates
+#### `--raw`
+| **Service** | **Usage** | **Type** | **Required** | **Alias** |  **Default** |**cli-default Entry**
+| --- | --- | --- | --- | --- | --- | ---| 
+| All | `--raw ` | `boolean` | `No`| `NaN` | `false`| `raw: ` |
+
+If true, the tool will output the raw data from the API (Where applicable, the feature is a WIP)
+#### `--rawoutput`
+| **Service** | **Usage** | **Type** | **Required** | **Alias** |  **Default** |**cli-default Entry**
+| --- | --- | --- | --- | --- | --- | ---| 
+| All | `--rawoutput ` | `string` | `No`| `NaN` | ``| `rawoutput: ` |
+
+Provide a path to output the raw data from the API into a file (Where applicable, the feature is a WIP)
 ### Help
 #### `--help`
 | **Service** | **Usage** | **Type** | **Required** | **Alias** |  **cli-default Entry**

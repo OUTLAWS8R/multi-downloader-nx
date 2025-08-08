@@ -188,7 +188,7 @@ class hlsDownload {
       // map download threads
       const krq = new Map(),
         prq = new Map();
-      const res = [];
+      const res: any[] = [];
       let errcnt = 0;
       for (let px = offset; px < dlOffset && px < segments.length; px++) {
         const curp = segments[px];
@@ -205,19 +205,45 @@ class hlsDownload {
       }
       for (let px = offset; px < dlOffset && px < segments.length; px++) {
         const curp = segments[px] as Segment;
-        prq.set(px, this.downloadPart(curp, px, this.data.offset));
+        prq.set(px, () => this.downloadPart(curp, px, this.data.offset));
       }
-      for (let i = prq.size; i--; ) {
-        try {
-          const r = await Promise.race(prq.values());
-          prq.delete(r.p);
-          res[r.p - offset] = r.dec;
-        } catch (error: any) {
-          console.error('Part %s download error:\n\t%s', error.p + 1 + this.data.offset, error.message);
-          prq.delete(error.p);
-          errcnt++;
+      // Parallelized part download with retry logic and optional concurrency limit
+      const maxConcurrency = this.data.threads;
+      const partEntries = [...prq.entries()];
+      let index = 0;
+
+      async function worker(this: hlsDownload) {
+        while (index < partEntries.length) {
+          const i = index++;
+          const [px, downloadFn] = partEntries[i];
+
+          let retriesLeft = this.data.retries;
+          let success = false;
+          while (retriesLeft > 0 && !success) {
+            try {
+              const r = await downloadFn();
+              res[px - offset] = r.dec;
+              success = true;
+            } catch (error: any) {
+              retriesLeft--;
+              console.warn(`Retrying part ${error.p + 1 + this.data.offset} (${this.data.retries - retriesLeft}/${this.data.retries})`);
+              if (retriesLeft > 0) {
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+              } else {
+                console.error(`Part ${error.p + 1 + this.data.offset} download failed after ${this.data.retries} retries:\n\t${error.message}`);
+                errcnt++;
+              }
+            }
+          }
         }
       }
+
+      const workers = [];
+      for (let i = 0; i < maxConcurrency; i++) {
+        workers.push(worker.call(this));
+      }
+      await Promise.all(workers);
+
       // catch error
       if (errcnt > 0) {
         console.error(`${errcnt} parts not downloaded`);
@@ -255,10 +281,18 @@ class hlsDownload {
           total: totalSeg
         })
       );
+      function formatDLSpeedB(s: number) {
+        if (s < 1000000) return `${(s / 1000).toFixed(2)} KB/s`;
+        if (s < 1000000000) return `${(s / 1000000).toFixed(2)} MB/s`;
+        return `${(s / 1000000000).toFixed(2)} GB/s`;
+      }
+      function formatDLSpeedBit(s: number) {
+        if (s * 8 < 1000000) return `${(s * 8 / 1000).toFixed(2)} KBit/s`;
+        if (s * 8 < 1000000000) return `${(s * 8 / 1000000).toFixed(2)} MBit/s`;
+        return `${(s * 8 / 1000000000).toFixed(2)} GBit/s`;
+      }
       console.info(
-        `${downloadedSeg} of ${totalSeg} parts downloaded [${data.percent}%] (${Helper.formatTime(parseInt((data.time / 1000).toFixed(0)))} | ${(
-          data.downloadSpeed / 1000000
-        ).toPrecision(2)}Mb/s)`
+        `${downloadedSeg} of ${totalSeg} parts downloaded [${data.percent}%] (${Helper.formatTime(parseInt((data.time / 1000).toFixed(0)))} | ${formatDLSpeedB(data.downloadSpeed)} / ${formatDLSpeedBit(data.downloadSpeed)})`
       );
       if (this.data.callback)
         this.data.callback({
@@ -376,13 +410,11 @@ const extFn = {
       method: 'GET',
       headers: headers,
       responseType: 'arrayBuffer',
-      retry: 10,
-      retryDelay: 1000,
+      retry: 0,
       async onRequestError({ error }) {
         const partType = isKey ? 'Key' : 'Part';
         const partIndx = partIndex + 1 + segOffset;
-        console.warn('%s %s: attempt to retrieve data', partType, partIndx);
-        console.error(`\t${error.message}`);
+        console.warn(`%s %s: ${error.message}`, partType, partIndx);
       }
     });
   }
