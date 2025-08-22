@@ -390,25 +390,25 @@ export default class Crunchy implements ServiceClass {
     console.info('All required fonts downloaded!');
   }
 
-  private async productionToken() {
-    const tokenReq = await this.req.getData(api.bundlejs);
+  // private async productionToken() {
+  //   const tokenReq = await this.req.getData(api.bundlejs);
 
-    if (!tokenReq.ok || !tokenReq.res) {
-      console.error('Failed to get Production Token!');
-      return { isOk: false, reason: new Error('Failed to get Production Token') };
-    }
+  //   if (!tokenReq.ok || !tokenReq.res) {
+  //     console.error('Failed to get Production Token!');
+  //     return { isOk: false, reason: new Error('Failed to get Production Token') };
+  //   }
 
-    const rawjs = await tokenReq.res.text();
+  //   const rawjs = await tokenReq.res.text();
 
-    const tokens = rawjs.match(/prod="([\w-]+:[\w-]+)"/);
+  //   const tokens = rawjs.match(/prod="([\w-]+:[\w-]+)"/);
 
-    if (!tokens) {
-      console.error('Failed to find Production Token in js!');
-      return { isOk: false, reason: new Error('Failed to find Production Token in js') };
-    }
+  //   if (!tokens) {
+  //     console.error('Failed to find Production Token in js!');
+  //     return { isOk: false, reason: new Error('Failed to find Production Token in js') };
+  //   }
 
-    return Buffer.from(tokens[1], 'latin1').toString('base64');
-  }
+  //   return Buffer.from(tokens[1], 'latin1').toString('base64');
+  // }
 
   public async doAuth(data: AuthData): Promise<AuthResponse> {
     const uuid = randomUUID();
@@ -423,7 +423,7 @@ export default class Crunchy implements ServiceClass {
     }).toString();
     const authReqOpts: reqModule.Params = {
       method: 'POST',
-      headers: {...api.crunchyAuthHeader, Authorization: `Basic ${await this.productionToken()}`},
+      headers: api.crunchyAuthHeader,
       body: authData
     };
     const authReq = await this.req.getData(api.auth, authReqOpts);
@@ -462,7 +462,7 @@ export default class Crunchy implements ServiceClass {
     }).toString();
     const authReqOpts: reqModule.Params = {
       method: 'POST',
-      headers: {...api.crunchyAuthHeader, Authorization: `Basic ${await this.productionToken()}`},
+      headers: api.crunchyAuthHeader,
       body: authData
     };
     const authReq = await this.req.getData(api.auth, authReqOpts);
@@ -530,7 +530,7 @@ export default class Crunchy implements ServiceClass {
     }).toString();
     const authReqOpts: reqModule.Params = {
       method: 'POST',
-      headers: {...api.crunchyAuthHeader, Authorization: `Basic ${await this.productionToken()}`, Cookie: `etp_rt=${refreshToken}`},
+      headers: {...api.crunchyAuthHeader, Cookie: `etp_rt=${refreshToken}`},
       body: authData
     };
     const authReq = await this.req.getData(api.auth, authReqOpts);
@@ -583,7 +583,7 @@ export default class Crunchy implements ServiceClass {
       }).toString();
       const authReqOpts: reqModule.Params = {
         method: 'POST',
-        headers: {...api.crunchyAuthHeader, Authorization: `Basic ${await this.productionToken()}`},
+        headers: api.crunchyAuthHeader,
         body: authData
       };
       const authReq = await this.req.getData(api.auth, authReqOpts);
@@ -2007,10 +2007,17 @@ export default class Crunchy implements ServiceClass {
               
             //Handle Getting Decryption Keys if needed
             if ((chosenVideoSegments.pssh_wvd ||chosenVideoSegments.pssh_prd || chosenAudioSegments.pssh_wvd || chosenAudioSegments.pssh_prd)) {
+              await this.refreshToken(true, true);
+              if (videoStream) {
+                await this.req.getData(`https://www.crunchyroll.com/playback/v1/token/${currentVersion ? currentVersion.guid : currentMediaId}/${videoStream.token}/keepAlive?playhead=1`, {...{method: 'PATCH'}, ...AuthHeaders});
+              }
+              if (audioStream && (videoStream?.token !== audioStream.token)) {
+                await this.req.getData(`https://www.crunchyroll.com/playback/v1/token/${currentVersion ? currentVersion.guid : currentMediaId}/${audioStream.token}/keepAlive?playhead=1`, {...{method: 'PATCH'}, ...AuthHeaders});
+              }
+
               console.info(`Getting decryption keys with ${cdm}`);
               // New Crunchyroll DRM endpoint for Widevine
               if (cdm === 'widevine') {
-                await this.refreshToken(true, true);
                 encryptionKeysVideo = await getKeysWVD(chosenVideoSegments.pssh_wvd, api.drm_widevine, {
                   Authorization: `Bearer ${this.token.access_token}`,
                   ...api.crunchyDefHeader,
@@ -2023,7 +2030,6 @@ export default class Crunchy implements ServiceClass {
 
                 // Check if the audio pssh is different since Crunchyroll started to have different dec keys for audio tracks
                 if (chosenAudioSegments.pssh_wvd && chosenAudioSegments.pssh_wvd !== chosenVideoSegments.pssh_wvd) {
-                  await this.refreshToken(true, true);
                   encryptionKeysAudio = await getKeysWVD(chosenAudioSegments.pssh_wvd, api.drm_widevine, {
                     Authorization: `Bearer ${this.token.access_token}`,
                     ...api.crunchyDefHeader,
@@ -2040,7 +2046,6 @@ export default class Crunchy implements ServiceClass {
 
               // New Crunchyroll DRM endpoint for Playready
               if (cdm === 'playready') {
-                await this.refreshToken(true, true);
                 encryptionKeysVideo = await getKeysPRD(chosenVideoSegments.pssh_prd, api.drm_playready, {
                   Authorization: `Bearer ${this.token.access_token}`,
                   ...api.crunchyDefHeader,
@@ -2053,7 +2058,6 @@ export default class Crunchy implements ServiceClass {
 
                 // Check if the audio pssh is different since Crunchyroll started to have different dec keys for audio tracks
                 if (chosenAudioSegments.pssh_prd && chosenAudioSegments.pssh_prd !== chosenVideoSegments.pssh_prd) {
-                  await this.refreshToken(true, true);
                   encryptionKeysAudio = await getKeysPRD(chosenAudioSegments.pssh_prd, api.drm_playready, {
                     Authorization: `Bearer ${this.token.access_token}`,
                     ...api.crunchyDefHeader,
