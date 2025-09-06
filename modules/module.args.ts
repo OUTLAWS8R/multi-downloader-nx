@@ -2,7 +2,7 @@ import type { LanguageItem } from './module.langsData';
 // Import the VALUES we need for the argument definitions
 import { aoSearchLocales, dubLanguageCodes, languages, searchLocales, subtitleLanguagesFilter, allLanguageIdentifiers } from './module.langsData';
 // Import from other files as needed
-import { CrunchyPlayStreams } from '../@types/enums';
+import { CrunchyVideoPlayStreams, CrunchyAudioPlayStreams } from '../@types/enums';
 
 const groups = {
   'auth': 'Authentication:',
@@ -304,7 +304,7 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
     service: ['crunchy'],
     type: 'string',
     describe: '(Please use --vstream and --astream instead, this will deprecate soon) Select a specific Crunchyroll playback endpoint by device. Since Crunchyroll has started rolling out their new VBR encodes, we highly recommend using a TV endpoint (e.g. vidaa, samsungtv, lgtv, rokutv, chromecast, firetv, androidtv) to access the old CBR encodes. Please note: The older encodes do not include the new 192 kbps audio, the new audio is only available with the new VBR encodes.',
-    choices: [...Object.keys(CrunchyPlayStreams), 'none'],
+    choices: [...Object.keys(CrunchyVideoPlayStreams), 'none'],
     docDescribe: true,
     usage: '${device}'
   },
@@ -315,7 +315,7 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
     service: ['crunchy'],
     type: 'string',
     describe: 'Select a specific Crunchyroll video playback endpoint by device.',
-    choices: [...Object.keys(CrunchyPlayStreams), 'none'],
+    choices: [...Object.keys(CrunchyVideoPlayStreams), 'none'],
     default: {
       default: 'androidtv'
     },
@@ -329,9 +329,9 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
     service: ['crunchy'],
     type: 'string',
     describe: 'Select a specific Crunchyroll audio playback endpoint by device.',
-    choices: [...Object.keys(CrunchyPlayStreams), 'none'],
+    choices: [...Object.keys(CrunchyAudioPlayStreams), 'none'],
     default: {
-      default: 'androidtv'
+      default: 'android'
     },
     docDescribe: true,
     usage: '${device}'
@@ -889,6 +889,7 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
       default: 'ja-JP'
     },
     transformer: (value: string): LanguageItem => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       return require('./module.langsData').findLangByAnyCode(value)!;
     },
   },
@@ -905,6 +906,7 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
       default: 'en-US'
     },
     transformer: (value: string): LanguageItem => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       return require('./module.langsData').findLangByAnyCode(value)!;
     },
   },
