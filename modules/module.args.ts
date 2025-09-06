@@ -1,5 +1,8 @@
-import { aoSearchLocales, dubLanguageCodes, languages, searchLocales, subtitleLanguagesFilter } from './module.langsData';
-import { CrunchyVideoPlayStreams, CrunchyAudioPlayStreams } from '../@types/enums';
+import type { LanguageItem } from './module.langsData';
+// Import the VALUES we need for the argument definitions
+import { aoSearchLocales, dubLanguageCodes, languages, searchLocales, subtitleLanguagesFilter, allLanguageIdentifiers } from './module.langsData';
+// Import from other files as needed
+import { CrunchyPlayStreams } from '../@types/enums';
 
 const groups = {
   'auth': 'Authentication:',
@@ -255,21 +258,6 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
       default: true
     }
   },
-  // Deprecated
-  // {
-  //   name: 'crapi',
-  //   describe: 'Selects the API type for Crunchyroll',
-  //   type: 'string',
-  //   group: 'dl',
-  //   service: ['crunchy'],
-  //   docDescribe: 'If set to Android, it has lower quality, but Non-DRM streams,'
-  //     + '\nIf set to Web, it has a higher quality adaptive stream, but everything is DRM.',
-  //   usage: '',
-  //   choices: ['android', 'web'],
-  //   default: {
-  //     default: 'web'
-  //   }
-  // },
   {
     name: 'removeBumpers',
     describe: 'Remove bumpers from final video',
@@ -309,22 +297,6 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
     service: ['all'],
     usage: '${server}'
   },
-  // Deprecated
-  // {
-  //   name: 'kstream',
-  //   group: 'dl',
-  //   alias: 'k',
-  //   describe: 'Select specific stream',
-  //   choices: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-  //   default: {
-  //     default: 1
-  //   },
-  //   docDescribe: true,
-  //   service: ['crunchy'],
-  //   type: 'number',
-  //   usage: '${stream}'
-  // },
-  // About to Deprecate
   {
     name: 'cstream',
     group: 'dl',
@@ -332,7 +304,7 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
     service: ['crunchy'],
     type: 'string',
     describe: '(Please use --vstream and --astream instead, this will deprecate soon) Select a specific Crunchyroll playback endpoint by device. Since Crunchyroll has started rolling out their new VBR encodes, we highly recommend using a TV endpoint (e.g. vidaa, samsungtv, lgtv, rokutv, chromecast, firetv, androidtv) to access the old CBR encodes. Please note: The older encodes do not include the new 192 kbps audio, the new audio is only available with the new VBR encodes.',
-    choices: [...Object.keys(CrunchyVideoPlayStreams), 'none'],
+    choices: [...Object.keys(CrunchyPlayStreams), 'none'],
     docDescribe: true,
     usage: '${device}'
   },
@@ -343,7 +315,7 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
     service: ['crunchy'],
     type: 'string',
     describe: 'Select a specific Crunchyroll video playback endpoint by device.',
-    choices: [...Object.keys(CrunchyVideoPlayStreams), 'none'],
+    choices: [...Object.keys(CrunchyPlayStreams), 'none'],
     default: {
       default: 'androidtv'
     },
@@ -357,9 +329,9 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
     service: ['crunchy'],
     type: 'string',
     describe: 'Select a specific Crunchyroll audio playback endpoint by device.',
-    choices: [...Object.keys(CrunchyAudioPlayStreams), 'none'],
+    choices: [...Object.keys(CrunchyPlayStreams), 'none'],
     default: {
-      default: 'android'
+      default: 'androidtv'
     },
     docDescribe: true,
     usage: '${device}'
@@ -432,17 +404,28 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
   },
   {
     name: 'dubLang',
-    describe: 'Set the language to download: ' 
-        + `\nCrunchy Only: ${languages.filter(a => a.cr_locale).map(a => a.code).join(', ')}`,
+    describe: 'Set the language to download by its tag (e.g., ja-JP, en-US)',
     docDescribe: true,
     group: 'dl',
-    choices: dubLanguageCodes,
+    choices: allLanguageIdentifiers, // This one is fine because its transformer returns a string[]
     default: {
-      default: [dubLanguageCodes.slice(-1)[0]]
+      name: 'dubLang',
+      default: [ 'ja-JP' ]
     },
     service: ['all'],
     type: 'array',
     usage: '${dub1} ${dub2}',
+    transformer: (values: string[]): string[] => {
+      const { findLangByAnyCode } = require('./module.langsData');
+      return values.map(val => {
+        if (val === 'all') return val;
+        const item = findLangByAnyCode(val);
+        if (!item) {
+          throw new Error(`Unable to find language for tag ${val}!`);
+        }
+        return item.code;
+      });
+    }
   },
   {
     name: 'all',
@@ -895,41 +878,35 @@ const args: TAppArg<boolean|number|string|unknown[]>[] = [
   },
   {
     name: 'defaultAudio',
-    describe: `Set the default audio track by language code\nPossible Values: ${languages.map(a => a.code).join(', ')}`,
+    describe: `Set the default audio track by language tag\nPossible Values: ${allLanguageIdentifiers.join(', ')}`,
     docDescribe: true,
     group: 'mux',
     service: ['all'],
     type: 'string',
     usage: '${args}',
     default: {
-      default: 'eng'
+      name: 'defaultAudio',
+      default: 'ja-JP'
     },
-    transformer: (val) => {
-      const item = languages.find(a => a.code === val);
-      if (!item) {
-        throw new Error(`Unable to find language code ${val}!`);
-      }
-      return item;
-    }
+    transformer: (value: string): LanguageItem => {
+      return require('./module.langsData').findLangByAnyCode(value)!;
+    },
   },
   {
     name: 'defaultSub',
-    describe: `Set the default subtitle track by language code\nPossible Values: ${languages.map(a => a.code).join(', ')}`,
+    describe: `Set the default subtitle track by language tag\nPossible Values: ${allLanguageIdentifiers.join(', ')}`,
     docDescribe: true,
     group: 'mux',
     service: ['all'],
     type: 'string',
     usage: '${args}',
     default: {
-      default: 'eng'
+      name: 'defaultSub',
+      default: 'en-US'
     },
-    transformer: (val) => {
-      const item = languages.find(a => a.code === val);
-      if (!item) {
-        throw new Error(`Unable to find language code ${val}!`);
-      }
-      return item;
-    }
+    transformer: (value: string): LanguageItem => {
+      return require('./module.langsData').findLangByAnyCode(value)!;
+    },
   },
   {
     name: 'ccTag',

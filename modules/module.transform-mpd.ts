@@ -1,3 +1,7 @@
+// build-in
+import { Buffer } from 'buffer';
+
+// plugins
 import { parse as mpdParse } from 'mpd-parser';
 import { LanguageItem, findLang, languages } from './module.langsData';
 import { console } from './log';
@@ -122,7 +126,7 @@ export async function parse(manifest: string, language?: LanguageItem, url?: str
 
       //Find and add audio language if it is found in the MPD
       let audiolang: LanguageItem;
-      const foundlanguage = findLang(languages.find(a => a.code === item.language)?.cr_locale ?? 'unknown');
+      const foundlanguage = findLang(languages.find(a => a.code === item.language)?.cr_locale ?? 'und');
       if (item.language) {
         audiolang = foundlanguage;
       } else {
@@ -147,25 +151,23 @@ export async function parse(manifest: string, language?: LanguageItem, url?: str
         })
       };
 
-      const playreadyPssh = extractPSSH(
-        manifest,
-        'urn:uuid:9A04F079-9840-4286-AB92-E65BE0885F95',
-        ['cenc:pssh', 'mspr:pro']
-      );
-
       const widevinePssh = extractPSSH(
         manifest,
-        'urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed',
+        'urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed', // Widevine UUID
         ['cenc:pssh']
       );
 
-      if (widevinePssh) {
+      const playreadyPssh = extractPSSH(
+        manifest,
+        'urn:uuid:9A04F079-9840-4286-AB92-E65BE0885F95', // PlayReady UUID
+        ['cenc:pssh', 'mspr:pro']
+      );
+
+      if (widevinePssh)
         pItem.pssh_wvd = widevinePssh;
-      }
   
-      if (playreadyPssh) {
+      if (playreadyPssh)
         pItem.pssh_prd = playreadyPssh;
-      }
 
       ret[host].audio.push(pItem);
     }
@@ -229,25 +231,23 @@ export async function parse(manifest: string, language?: LanguageItem, url?: str
       })
     };
 
-    const playreadyPssh = extractPSSH(
-      manifest,
-      'urn:uuid:9A04F079-9840-4286-AB92-E65BE0885F95',
-      ['cenc:pssh', 'mspr:pro']
-    );
-
     const widevinePssh = extractPSSH(
       manifest,
-      'urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed',
+      'urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed', // Widevine UUID
       ['cenc:pssh']
     );
 
-    if (widevinePssh) {
-      pItem.pssh_wvd = widevinePssh;
-    }
+    const playreadyPssh = extractPSSH(
+      manifest,
+      'urn:uuid:9A04F079-9840-4286-AB92-E65BE0885F95', // PlayReady UUID
+      ['cenc:pssh', 'mspr:pro']
+    );
 
-    if (playreadyPssh) {
+    if (widevinePssh)
+      pItem.pssh_wvd = widevinePssh;
+
+    if (playreadyPssh)
       pItem.pssh_prd = playreadyPssh;
-    }
 
     ret[host].video.push(pItem);
   }

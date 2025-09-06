@@ -46,7 +46,7 @@ function loadVtt(vttStr: string) {
 function convertToAss(vttStr: string, lang: string, fontSize: number, fontName?: string){
   let ass = [
     '\ufeff[Script Info]',
-    `Title: ${lang}`,
+    `Title: [DKB Team] ${lang}`,
     'ScriptType: v4.00+',
     'PlayResX: 1280',
     'PlayResY: 720',

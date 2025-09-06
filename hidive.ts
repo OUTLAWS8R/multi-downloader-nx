@@ -55,13 +55,6 @@ export default class Hidive implements ServiceClass {
     if (argv.debug)
       this.debug = true;
 
-    //below is for quickly testing API calls
-    /*const apiTest = await this.apiReq('/v4/season/18871', '', 'auth', 'GET');
-      if(!apiTest.ok || !apiTest.res){return;}
-      console.info(apiTest.res.body);
-      fs.writeFileSync('apitest.json', JSON.stringify(JSON.parse(apiTest.res.body), null, 2));
-      return console.info('test done');*/
-
     // load binaries
     this.cfg.bin = await yamlCfg.loadBinCfg();
     if (argv.allDubs) {
@@ -321,12 +314,6 @@ export default class Hidive implements ServiceClass {
     return { isOk: true, value: seriesData };
   }
 
-  /**
-   * Function to get the season data from the API
-   * @param id ID of the season
-   * @param lastSeen Last episode ID seen, used for paging
-   * @returns 
-   */
   public async getSeason(id: number, lastSeen?: number) {
     const getSeasonData = await this.apiReq(`/v4/season/${id}?rpp=20${lastSeen ? '&lastSeen='+lastSeen : ''}`, '', 'auth', 'GET');
     if (!getSeasonData.ok || !getSeasonData.res) { 
@@ -369,7 +356,6 @@ export default class Hidive implements ServiceClass {
           episode.episodeInformation.episodeNumber = parseFloat(episode.title.split(' - ')[0].replace('E', ''));
           episode.title = episode.title.split(' - ')[1];
         }
-        //S${episode.episodeInformation.seasonNumber}E${episode.episodeInformation.episodeNumber} - 
         if (!datePattern.test(episode.title) && episode.duration !== 10) {
           episodes.push(episode);
         }
@@ -400,7 +386,6 @@ export default class Hidive implements ServiceClass {
         episode.episodeInformation.episodeNumber = parseFloat(episode.title.split(' - ')[0].replace('E', ''));
         episode.title = episode.title.split(' - ')[1];
       }
-      //S${episode.episodeInformation.seasonNumber}E${episode.episodeInformation.episodeNumber} - 
       if (!datePattern.test(episode.title) && episode.duration !== 10) {
         episodes.push(episode);
       }
@@ -410,14 +395,6 @@ export default class Hidive implements ServiceClass {
     return { isOk: true, value: episodes, series: series };
   }
 
-  /**
-   * Lists the requested series, and returns the selected episodes
-   * @param id Series ID
-   * @param e Selector
-   * @param but Download all but selected videos
-   * @param all Whether to download all available videos
-   * @returns 
-   */
   public async selectSeries(id: number, e: string | undefined, but: boolean, all: boolean) {
     const getShowData = await this.listSeries(id);
     if (!getShowData.isOk || !getShowData.value) {
@@ -425,43 +402,55 @@ export default class Hidive implements ServiceClass {
     }
     const showData = getShowData.value;
     const doEpsFilter = parseSelect(e as string);
-    // build selected episodes
-    const selEpsArr: NewHidiveEpisodeExtra[] = []; let ovaSeq = 1; let movieSeq = 1;
+
+    console.info('\nFull Episode List (Use # for selection with -e):');
+    
+    const selEpsArr: NewHidiveEpisodeExtra[] = [];
+    let ovaSeq = 1;
+    let movieSeq = 1;
+    let absoluteEpisodeNumber = 1;
+
     for (let i = 0; i < showData.length; i++) {
-      const titleId = showData[i].id;
+      const currentEpisode = showData[i];
+      const titleId = currentEpisode.id;
       const seriesTitle = getShowData.series.title;
-      const seasonTitle = getShowData.series.seasons[showData[i].episodeInformation.seasonNumber-1]?.title ?? seriesTitle;
-      let nameLong = showData[i].title;
+      const seasonTitle = getShowData.series.seasons[currentEpisode.episodeInformation.seasonNumber-1]?.title ?? seriesTitle;
+      
+      let nameLong = currentEpisode.title;
       if (nameLong.match(/OVA/i)) {
-        nameLong = 'ova' + (('0' + ovaSeq).slice(-2)); ovaSeq++;
+        nameLong = 'ova' + (('0' + ovaSeq).slice(-2));
+        ovaSeq++;
       } else if (nameLong.match(/Theatrical/i)) {
-        nameLong = 'movie' + (('0' + movieSeq).slice(-2)); movieSeq++;
+        nameLong = 'movie' + (('0' + movieSeq).slice(-2));
+        movieSeq++;
       }
+      const identifiers = [ absoluteEpisodeNumber.toString() ];
+      
       let selMark = '';
-      if (all || 
-      but && !doEpsFilter.isSelected([parseFloat(showData[i].episodeInformation.episodeNumber+'')+'', showData[i].id+'']) || 
-      !but && doEpsFilter.isSelected([parseFloat(showData[i].episodeInformation.episodeNumber+'')+'', showData[i].id+''])
+      // Check if the episode is selected using ONLY its absolute ID
+      if (all ||
+        (but && !doEpsFilter.isSelected(identifiers)) ||
+        (!but && doEpsFilter.isSelected(identifiers))
       ) {
-        selEpsArr.push({ isSelected: true, titleId, nameLong, seasonTitle, seriesTitle, ...showData[i] });
+        selEpsArr.push({ isSelected: true, titleId, nameLong, seasonTitle, seriesTitle, ...currentEpisode });
         selMark = '✓ ';
       }
-      console.info('%s[%s] %s',
+      
+      console.info('%s[#%s / S%sE%s] %s',
         selMark,
-        'S'+parseFloat(showData[i].episodeInformation.seasonNumber+'')+'E'+parseFloat(showData[i].episodeInformation.episodeNumber+''),
-        showData[i].title,
+        absoluteEpisodeNumber.toString().padStart(2, '0'), // Show absolute number (e.g., #14)
+        currentEpisode.episodeInformation.seasonNumber,
+        currentEpisode.episodeInformation.episodeNumber,
+        currentEpisode.title,
       );
+
+      // Increment the counter for the next episode
+      absoluteEpisodeNumber++;
     }
+ 
     return { isOk: true, value: selEpsArr, showData: getShowData.series };
   }
 
-  /**
-   * Lists the requested season, and returns the selected episodes
-   * @param id Season ID
-   * @param e Selector
-   * @param but Download all but selected videos
-   * @param all Whether to download all available videos
-   * @returns 
-   */
   public async selectSeason(id: number, e: string | undefined, but: boolean, all: boolean) {
     const getShowData = await this.listSeason(id);
     if (!getShowData.isOk || !getShowData.value) {
@@ -535,7 +524,13 @@ export default class Hidive implements ServiceClass {
     const showTitle = `${selectedEpisode.seriesTitle} S${selectedEpisode.episodeInformation.seasonNumber}`;
     console.info(`[INFO] ${showTitle} - ${selectedEpisode.episodeInformation.episodeNumber}`);
     console.info('[INFO] Available dubs and subtitles:');
-    console.info('\tAudios: ' + episodeData.offlinePlaybackLanguages.map(a => langsData.languages.find(b => b.code == a)?.name).join('\n\t\t'));
+
+    const availableAudios = episodeData.offlinePlaybackLanguages
+        .map(apiCode => langsData.languages.find(lang => lang.hidive_audio_code === apiCode)?.name)
+        .filter(Boolean) // Remove any undefined names if a mapping doesn't exist
+        .join('\n\t\t');
+    console.info('\tAudios: ' + (availableAudios.length > 0 ? '\n\t\t' + availableAudios : ''));
+    
     console.info('\tSubs  : ' + availableSubs.map(a => langsData.languages.find(b => b.new_hd_locale == a.language)?.name).join('\n\t\t'));
     console.info(`[INFO] Selected dub(s): ${options.dubLang.join(', ')}`);
     const baseUrl = playbackData.dash[0].url.split('master')[0];
@@ -624,7 +619,13 @@ export default class Hidive implements ServiceClass {
     const showTitle = `${selectedEpisode.seriesTitle} S${selectedEpisode.episodeInformation.seasonNumber}`;
     console.info(`[INFO] ${showTitle} - ${selectedEpisode.episodeInformation.episodeNumber}`);
     console.info('[INFO] Available dubs and subtitles:');
-    console.info('\tAudios: ' + episodeData.offlinePlaybackLanguages.map(a => langsData.languages.find(b => b.code == a)?.name).join('\n\t\t'));
+
+    const availableAudios = episodeData.offlinePlaybackLanguages
+        .map(apiCode => langsData.languages.find(lang => lang.hidive_audio_code === apiCode)?.name)
+        .filter(Boolean)
+        .join('\n\t\t');
+    console.info('\tAudios: ' + (availableAudios.length > 0 ? '\n\t\t' + availableAudios : ''));
+    
     console.info('\tSubs  : ' + availableSubs.map(a => langsData.languages.find(b => b.new_hd_locale == a.language)?.name).join('\n\t\t'));
     console.info(`[INFO] Selected dub(s): ${options.dubLang.join(', ')}`);
     const baseUrl = playbackData.dash[0].url.split('master')[0];
@@ -655,7 +656,7 @@ export default class Hidive implements ServiceClass {
     const subsMargin = 0;
     const chosenFontSize = options.originalFontSize ? undefined : options.fontSize;
     let encryptionKeys: KeyContainer[] = [];
-    if (!canDecrypt && (!options.novids || !options.noaudio)) {
+    if (!canDecrypt) {
       console.error('No valid Widevine or PlayReady CDM detected. Please ensure a supported and functional CDM is installed.');
       return undefined;
     }
@@ -663,7 +664,7 @@ export default class Hidive implements ServiceClass {
     if (!this.cfg.bin.ffmpeg) 
       this.cfg.bin = await yamlCfg.loadBinCfg();
 
-    if (!this.cfg.bin.mp4decrypt && !this.cfg.bin.shaka && (!options.novids || !options.noaudio)) {
+    if (!this.cfg.bin.mp4decrypt && !this.cfg.bin.shaka) {
       console.error('Neither Shaka nor MP4Decrypt found. Please ensure at least one of them is installed.');
       return undefined;
     }
@@ -707,17 +708,12 @@ export default class Hidive implements ServiceClass {
       };
     });
 
-
     videos.sort((a, b) => {
       return a.bandwidth - b.bandwidth;
     });
 
     videos.sort((a, b) => {
       return a.quality.width - b.quality.width;
-    });
-
-    audios.sort((a, b) => {
-      return a.bandwidth - b.bandwidth;
     });
 
     let chosenVideoQuality = options.q === 0 ? videos.length : options.q;
@@ -742,25 +738,54 @@ export default class Hidive implements ServiceClass {
       type: 'number',
       replaceWith: chosenVideoSegments.quality.width
     });
-
     const chosenAudios: typeof audios[0][] = [];
     const audioByLanguage: Record<string,typeof audios[0][]> = {};
     for (const audio of audios) {
       if (!audioByLanguage[audio.language.code]) audioByLanguage[audio.language.code] = [];
       audioByLanguage[audio.language.code].push(audio);
     }
-    for (const dubLang of options.dubLang as string[]) {
-      if (audioByLanguage[dubLang]) {
-        let chosenAudioQuality = options.q === 0 ? audios.length : options.q;
-        if(chosenAudioQuality > audioByLanguage[dubLang].length) {
-          chosenAudioQuality = audioByLanguage[dubLang].length;
+
+    // 1. Primary Selection: Use the 'hidive_audio_code' for a direct match
+    for (const requestedLangCode of options.dubLang as string[]) {
+        const langConfig = langsData.languages.find(l => l.code === requestedLangCode);
+
+        if (langConfig && langConfig.hidive_audio_code) {
+            const hidiveCode = langConfig.hidive_audio_code; // e.g., 'jpn'
+
+            if (audioByLanguage[hidiveCode]) {
+                const audiosForLang = audioByLanguage[hidiveCode];
+                let chosenAudioQuality = options.q === 0 ? audiosForLang.length : options.q;
+                if (chosenAudioQuality > audiosForLang.length) {
+                    chosenAudioQuality = audiosForLang.length;
+                }
+                chosenAudioQuality--;
+                chosenAudios.push(audiosForLang[chosenAudioQuality]);
+            }
+        }
+    }
+    
+    // 2. Fallback Logic: Only if no direct match was found, use the bandwidth heuristic
+    if (chosenAudios.length == 0) {
+      console.warn(`Could not find a direct match for selected audio language(s). Using fallback logic.`);
+      if (audios.length > 0) {
+        // Assume the original language is the one with the lowest bandwidth.
+        const sortedAudios = [...audios].sort((a,b) => a.bandwidth - b.bandwidth);
+        
+        const targetLangCode = sortedAudios[0].language.code;
+        const audiosToUse = audioByLanguage[targetLangCode];
+
+        let chosenAudioQuality = options.q === 0 ? audiosToUse.length : options.q;
+        if(chosenAudioQuality > audiosToUse.length) {
+          chosenAudioQuality = audiosToUse.length;
         }
         chosenAudioQuality--;
-        chosenAudios.push(audioByLanguage[dubLang][chosenAudioQuality]);
+        chosenAudios.push(audiosToUse[chosenAudioQuality]);
+        console.info(`Using audio track with language code '${targetLangCode}' based on lowest bandwidth heuristic.`);
       }
     }
+
     if (chosenAudios.length == 0) {
-      console.error(`Chosen audio language(s) does not exist for episode ${selectedEpisode.episodeInformation.episodeNumber}`);
+      console.error(`Could not select any audio track for episode ${selectedEpisode.episodeInformation.episodeNumber}`);
       return undefined;
     }
 
