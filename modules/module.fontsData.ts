@@ -189,6 +189,8 @@ const fontFamilies = {
   'MS UI Gothic': ['MS-UIGothic-02.ttf'],  
   'MS Sans Serif': ['micross.ttf'],
   'Noto Sans Thai': ['NotoSansThai-Regular.ttf'],
+  'Noto Sans Telugu': ['NotoSansTeluguVariable.ttf'],
+  'Noto Sans Tamil': ['NotoSansTamilVariable.ttf'],
   'Monotype Corsiva': ['Mtcorsva.ttf'],
   'Onyx': ['Onyx.ttf'],
   'Open Sans Bold': ['OpenSans-Bold.ttf'],
