@@ -16,6 +16,7 @@ const fontFamilies = {
   'Arial Bold Italic': ['arialbi.ttf'],
   'Arial Italic': ['ariali.ttf'],
   'Arial Unicode MS': ['arialuni.ttf'],
+  'Arial Unicode MS Bold': ['arialunibd.ttf'],
   'Arial Black': ['ariblk.ttf'],
   'Arial Nova': ['ArialNova.ttf'],
   'Arial Nova Italic': ['ArialNova-Italic.ttf'],
@@ -189,6 +190,7 @@ const fontFamilies = {
   'MS UI Gothic': ['MS-UIGothic-02.ttf'],  
   'MS Sans Serif': ['micross.ttf'],
   'Noto Sans Thai': ['NotoSansThai-Regular.ttf'],
+  'Noto Sans Thai Bold': ['NotoSansThai-Bold.ttf'],
   'Noto Sans Telugu': ['NotoSansTeluguVariable.ttf'],
   'Noto Sans Tamil': ['NotoSansTamilVariable.ttf'],
   'Monotype Corsiva': ['Mtcorsva.ttf'],
@@ -269,21 +271,42 @@ const fontFamilies = {
   'Yu Gothic UI Semilight': ['YuGothicUI-Semilight-02.ttf'],
 };
 
-// collect styles from ass string
-function assFonts(ass: string){
-  const strings = ass.replace(/\r/g,'').split('\n');
-  const styles: string[] = [];
-  for(const s of strings){
-    if(s.match(/^Style: /)){
-      const addStyle = s.split(',');
-      styles.push(addStyle[1]);
+// parse ass
+function assFonts(ass: string): string[] {
+  const requiredFonts = new Set<string>();
+  const lines = ass.replace(/\r/g, '').split('\n');
+
+  // parse [V4+ Styles]
+  for (const line of lines) {
+    if (line.startsWith('Style: ')) {
+      const parts = line.split(',');
+      if (parts.length < 9) continue;
+
+      const fontName = parts[1].trim();
+      const isBold = parts[7].trim() === '-1';
+      const isItalic = parts[8].trim() === '-1';
+
+      requiredFonts.add(fontName);
+
+      if (isBold && isItalic) {
+        requiredFonts.add(`${fontName} Bold Italic`);
+        requiredFonts.add(`${fontName} Bold`);
+        requiredFonts.add(`${fontName} Italic`);
+      } else if (isBold) {
+        requiredFonts.add(`${fontName} Bold`);
+      } else if (isItalic) {
+        requiredFonts.add(`${fontName} Italic`);
+      }
     }
   }
+
+  // parse overrides
   const fontMatches = ass.matchAll(/\\fn([^\\}]+)/g);
   for (const match of fontMatches) {
-    styles.push(match[1]);
+    requiredFonts.add(match[1].trim());
   }
-  return [...new Set(styles)];
+
+  return [...requiredFonts];
 }
 
 // font mime type
