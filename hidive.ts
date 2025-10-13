@@ -765,37 +765,37 @@ export default class Hidive implements ServiceClass {
     }
     
     // 2. Fallback Logic: Only if no direct match was found, use the bandwidth heuristic
-if (chosenAudios.length == 0) {
-  console.warn(`Could not find a direct match for selected audio language(s). Using fallback logic.`);
-  if (audios.length > 0) {
-    // Assume the original language is the one with the lowest bandwidth.
-    const sortedAudios = [...audios].sort((a,b) => a.bandwidth - b.bandwidth);
-    
-    const targetLangCode = sortedAudios[0].language.code;
-    const audiosToUse = audioByLanguage[targetLangCode];
+    if (chosenAudios.length == 0) {
+      console.warn(`Could not find a direct match for selected audio language(s). Using fallback logic.`);
+      if (audios.length > 0) {
+        // Assume the original language is the one with the lowest bandwidth.
+        const sortedAudios = [...audios].sort((a,b) => a.bandwidth - b.bandwidth);
+        
+        const targetLangCode = sortedAudios[0].language.code;
+        const audiosToUse = audioByLanguage[targetLangCode];
 
-    let chosenAudioQuality = options.q === 0 ? audiosToUse.length : options.q;
-    if(chosenAudioQuality > audiosToUse.length) {
-      chosenAudioQuality = audiosToUse.length;
-    }
-    chosenAudioQuality--;
+        let chosenAudioQuality = options.q === 0 ? audiosToUse.length : options.q;
+        if(chosenAudioQuality > audiosToUse.length) {
+          chosenAudioQuality = audiosToUse.length;
+        }
+        chosenAudioQuality--;
 
-    // Get the selected audio object
-    const chosenAudio = audiosToUse[chosenAudioQuality];
-    if (chosenAudio.language.code === 'und') {
-      console.warn('Assuming "und" audio track is Japanese.');
-      // Find the correct Japanese language object from data module
-      const japaneseLang = langsData.findLangByAnyCode('jpn'); 
-      if (japaneseLang) {
-        // Overwrite the incorrect 'und' language object with the correct Japanese one
-        chosenAudio.language = japaneseLang;
+        // Get the selected audio object
+        const chosenAudio = audiosToUse[chosenAudioQuality];
+        if (chosenAudio.language.code === 'und') {
+          console.warn('Assuming "und" audio track is Japanese.');
+          // Find the correct Japanese language object from data module
+          const japaneseLang = langsData.findLangByAnyCode('jpn'); 
+          if (japaneseLang) {
+            // Overwrite the incorrect 'und' language object with the correct Japanese one
+            chosenAudio.language = japaneseLang;
+          }
+        }
+
+        chosenAudios.push(chosenAudio);
+        console.info(`Using audio track with language code '${targetLangCode}' based on lowest bandwidth heuristic.`);
       }
     }
-
-    chosenAudios.push(chosenAudio);
-    console.info(`Using audio track with language code '${targetLangCode}' based on lowest bandwidth heuristic.`);
-  }
-}
 
     if (chosenAudios.length == 0) {
       console.error(`Could not select any audio track for episode ${selectedEpisode.episodeInformation.episodeNumber}`);
@@ -867,14 +867,16 @@ if (chosenAudios.length == 0) {
             return undefined;
           }
           if (this.cfg.bin.mp4decrypt || this.cfg.bin.shaka) {
-            let commandBase = `--show-progress --key ${encryptionKeys[cdm === 'playready' ? 0 : 1].kid}:${encryptionKeys[cdm === 'playready' ? 0 : 1].key} `;
-            let commandVideo = commandBase+`"${tempTsFile}.video.enc.m4s" "${tempTsFile}.video.m4s"`;
+            let commandBase = '';
+            let commandVideo = '';
 
             if (this.cfg.bin.shaka) {
               commandBase = ` --enable_raw_key_decryption ${encryptionKeys.map(kb => '--keys key_id='+kb.kid+':key='+kb.key).join(' ')}`;
               commandVideo = `input="${tempTsFile}.video.enc.m4s",stream=video,output="${tempTsFile}.video.m4s"`+commandBase;
+            } else {
+              commandBase = `--show-progress ${encryptionKeys.map(k => `--key ${k.kid}:${k.key}`).join(' ')} `;
+              commandVideo = commandBase + `"${tempTsFile}.video.enc.m4s" "${tempTsFile}.video.m4s"`;
             }
-
             console.info('Started decrypting video,', this.cfg.bin.shaka ? 'using shaka' : 'using mp4decrypt');
             const decryptVideo = Helper.exec(this.cfg.bin.shaka ? 'shaka-packager' : 'mp4decrypt', this.cfg.bin.shaka ? `"${this.cfg.bin.shaka}"` : `"${this.cfg.bin.mp4decrypt}"`, commandVideo);
             if (!decryptVideo.isOk) {
@@ -953,14 +955,16 @@ if (chosenAudios.length == 0) {
             return undefined;
           }
           if (this.cfg.bin.mp4decrypt || this.cfg.bin.shaka) {
-            let commandBase = `--show-progress --key ${encryptionKeys[cdm === 'playready' ? 0 : 1].kid}:${encryptionKeys[cdm === 'playready' ? 0 : 1].key} `;
-            let commandAudio = commandBase+`"${tempTsFile}.audio.enc.m4s" "${tempTsFile}.audio.m4s"`;
+            let commandBase = '';
+            let commandAudio = '';
 
             if (this.cfg.bin.shaka) {
               commandBase = ` --enable_raw_key_decryption ${encryptionKeys.map(kb => '--keys key_id='+kb.kid+':key='+kb.key).join(' ')}`;
               commandAudio = `input="${tempTsFile}.audio.enc.m4s",stream=audio,output="${tempTsFile}.audio.m4s"`+commandBase;
+            } else {
+              commandBase = `--show-progress ${encryptionKeys.map(k => `--key ${k.kid}:${k.key}`).join(' ')} `;
+              commandAudio = commandBase + `"${tempTsFile}.audio.enc.m4s" "${tempTsFile}.audio.m4s"`;
             }
-
             console.info('Started decrypting audio');
             const decryptAudio = Helper.exec(this.cfg.bin.shaka ? 'shaka-packager' : 'mp4decrypt', this.cfg.bin.shaka ? `"${this.cfg.bin.shaka}"` : `"${this.cfg.bin.mp4decrypt}"`, commandAudio);
             if (!decryptAudio.isOk) {

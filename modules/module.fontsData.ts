@@ -5,7 +5,9 @@ const root = 'https://static.crunchyroll.com/vilos-v2/web/vilos/assets/libass-fo
 const fontFamilies = {
   'A-OTF Kakumin Pro': ['A-OTF_Kakumin_Pro_M.otf'],
   'AdLib BT': ['AdLibRg.ttf'],
-  'Adobe Arabic': ['Adobe_Arabic_Regular.ttf'], 
+  'Adobe Arabic': ['Adobe_Arabic_Regular.ttf'],
+  'Adobe Arabic Italic': ['Adobe_Arabic_Italic.otf'],
+  'Adobe Arabic Bold Italic': ['Adobe_Arabic_Bold Italic.otf'],
   'Adobe Arabic Bold': ['AdobeArabic-Bold.otf'],
   'Andale Mono': ['andalemo.ttf'],
   'Agency FB': ['Agencyr.ttf'],
@@ -245,6 +247,7 @@ const fontFamilies = {
   'Square 721 Blk': ['Square721BlkNormal.ttf'],
   'Swis721 BT': ['Swiss-721-BT-Font.ttf'],
   'Tahoma': ['tahoma.ttf'],
+  'Tahoma Italic': ['tahoma-italic.ttf'],
   'Tempus Sans ITC': ['Tempsitc.ttf'],
   'Terminal': ['Terminal.ttf'],
   'Timeless': ['Timeless.ttf'],
