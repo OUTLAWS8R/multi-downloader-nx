@@ -1794,6 +1794,8 @@ export default class Crunchy implements ServiceClass {
 				} else {
 					audioStream = (await audioPlaybackReq.res.json()) as CrunchyPlayStream;
 					const derivedPlaystreams = {} as CrunchyStreams;
+					// Give Audiostream the Videostream hardsubs if undefined or empty array
+					if (!audioStream.hardSubs || Object.values(audioStream.hardSubs).length === 0) audioStream.hardSubs = videoStream.hardSubs;
 					for (const hardsub in audioStream.hardSubs) {
 						const stream = audioStream.hardSubs[hardsub];
 						derivedPlaystreams[hardsub] = {
@@ -1954,6 +1956,14 @@ export default class Crunchy implements ServiceClass {
 						}
 						return s.hardsub_lang == options.hslang;
 					});
+					if (astreams.length < 1) {
+						console.warn('No audio streams found, using video audio streams instead');
+						astreams = vstreams;
+					}
+					if (vstreams.length < 1) {
+						console.error('Raw video streams not available!');
+						dlFailed = true;
+					}
 				} else {
 					console.warn('Selected stream with %s hardsubs not available', langsData.locale2language(options.hslang).language);
 					if (hsLangs.length > 0) {
@@ -1968,15 +1978,12 @@ export default class Crunchy implements ServiceClass {
 				astreams = astreams.filter((s) => {
 					return s.hardsub_lang == '-';
 				});
-				if (vstreams.length < 1) {
-					console.warn('Raw video streams not available!');
-					if (hsLangs.length > 0) {
-						console.warn('Try hardsubs stream:', hsLangs.join(', '));
-					}
-					dlFailed = true;
-				}
 				if (astreams.length < 1) {
-					console.warn('Raw audio streams not available!');
+					console.warn('No audio streams found, using video audio streams instead');
+					astreams = vstreams;
+				}
+				if (vstreams.length < 1) {
+					console.error('Raw video streams not available!');
 					if (hsLangs.length > 0) {
 						console.warn('Try hardsubs stream:', hsLangs.join(', '));
 					}
