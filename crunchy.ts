@@ -9,7 +9,7 @@ import packageJson from './package.json';
 import { console } from './modules/log';
 import streamdl, { M3U8Json } from './modules/hls-download';
 import Helper from './modules/module.helper';
-import m3u8 from 'm3u8-parser';
+import { Parser } from 'm3u8-parser';
 
 // custom modules
 import * as fontsData from './modules/module.fontsData';
@@ -1609,7 +1609,7 @@ export default class Crunchy implements ServiceClass {
 				if (mMeta.lang) {
 					currentVersion = mMeta.versions.find((a) => a.audio_locale == mMeta.lang?.cr_locale);
 				} else if (options.dubLang.length == 1) {
-					const currentLang = langsData.languages.find((a) => a.code == options.dubLang[0]);
+					const currentLang = langsData.languages.find((a) => a.code == options.dubLang[0] || a.cr_locale == options.dubLang[0] || a.locale == options.dubLang[0]);
 					currentVersion = mMeta.versions.find((a) => a.audio_locale == currentLang?.cr_locale);
 				} else if (mMeta.versions.length == 1) {
 					currentVersion = mMeta.versions[0];
@@ -2141,31 +2141,26 @@ export default class Crunchy implements ServiceClass {
 							};
 						});
 
-						videos.sort((a, b) => {
-							return a.quality.width - b.quality.width;
-						});
+						// Sort Low -> High
+						videos.sort((a, b) => a.quality.width - b.quality.width);
+						audios.sort((a, b) => a.bandwidth - b.bandwidth);
 
-						audios.sort((a, b) => {
-							return a.bandwidth - b.bandwidth;
-						});
+						const myQ = parseInt(String(options.q));
 
-						let chosenVideoQuality = options.q === 0 ? videos.length : options.q;
-						if (chosenVideoQuality > videos.length) {
-							console.warn(
-								`The requested quality of ${options.q} is greater than the maximum ${videos.length}.\n[WARN] Therefor the maximum will be capped at ${videos.length}.`
-							);
-							chosenVideoQuality = videos.length;
-						}
-						chosenVideoQuality--;
+						// Calculate Video Index (0 = Best/Last, else 1-based index)
+						let vIndex = myQ === 0 ? videos.length - 1 : myQ - 1;
+						// Safety Cap
+						if (vIndex >= videos.length) vIndex = videos.length - 1;
+						if (vIndex < 0) vIndex = 0;
 
-						let chosenAudioQuality = options.q === 0 ? audios.length : options.q;
-						if (chosenAudioQuality > audios.length) {
-							chosenAudioQuality = audios.length;
-						}
-						chosenAudioQuality--;
+						// Calculate Audio Index (0 = Best/Last, else 1-based index)
+						let aIndex = myQ === 0 ? audios.length - 1 : myQ - 1;
+						// Safety Cap
+						if (aIndex >= audios.length) aIndex = audios.length - 1;
+						if (aIndex < 0) aIndex = 0;
 
-						const chosenVideoSegments = videos[chosenVideoQuality];
-						const chosenAudioSegments = audios[chosenAudioQuality];
+						const chosenVideoSegments = videos[vIndex];
+						const chosenAudioSegments = audios[aIndex];
 
 						console.info(`Available Video Qualities:\n\t${videos.map((a, ind) => `[${ind + 1}] ${a.resolutionText}`).join('\n\t')}`);
 						console.info(`Available Audio Qualities:\n\t${audios.map((a, ind) => `[${ind + 1}] ${a.resolutionText}`).join('\n\t')}`);
@@ -2638,7 +2633,7 @@ export default class Crunchy implements ServiceClass {
 
 								const chunkPageBody = await chunkPage.res.text();
 								// Init parser
-								const parser = new m3u8.Parser();
+								const parser = new Parser();
 
 								// Parse M3U8
 								parser.push(chunkPageBody);

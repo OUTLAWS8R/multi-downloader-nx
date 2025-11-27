@@ -46,7 +46,7 @@ export default class Hidive implements ServiceClass {
   constructor(private debug = false) {
     this.cfg = yamlCfg.loadCfg();
     this.token = yamlCfg.loadNewHDToken();
-    this.req = new reqModule.Req(domain, debug, false, 'hd');
+    this.req = new reqModule.Req();
   }
 
   public async cli() {
