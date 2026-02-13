@@ -514,7 +514,7 @@ const args: TAppArg<boolean | number | string | unknown[]>[] = [
     describe: 'Set the language to download by its tag (e.g., ja-JP, en-US)',
     docDescribe: true,
     group: 'dl',
-    choices: allLanguageIdentifiers, // This one is fine because its transformer returns a string[]
+    choices: allLanguageIdentifiers, 
     default: {
       name: 'dubLang',
       default: [ 'ja-JP' ]
@@ -522,13 +522,14 @@ const args: TAppArg<boolean | number | string | unknown[]>[] = [
     service: ['all'],
     type: 'array',
     usage: '${dub1} ${dub2}',
-    transformer: (values: string[]): string[] => {
+    transformer: (values: string[] | unknown): string[] => {
+      const val = values as string[];
       const { findLangByAnyCode } = require('./module.langsData');
-      return values.map(val => {
-        if (val === 'all') return val;
-        const item = findLangByAnyCode(val);
+      return val.map(v => {
+        if (v === 'all') return v;
+        const item = findLangByAnyCode(v);
         if (!item) {
-          throw new Error(`Unable to find language for tag ${val}!`);
+          throw new Error(`Unable to find language for tag ${v}!`);
         }
         return item.code;
       });
@@ -997,9 +998,10 @@ const args: TAppArg<boolean | number | string | unknown[]>[] = [
       name: 'defaultAudio',
       default: 'ja-JP'
     },
-    transformer: (value: string): LanguageItem => {
+    transformer: (value: string | unknown): LanguageItem => {
+      const val = value as string;
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      return require('./module.langsData').findLangByAnyCode(value)!;
+      return require('./module.langsData').findLangByAnyCode(val)!;
     },
   },
   {
@@ -1014,9 +1016,10 @@ const args: TAppArg<boolean | number | string | unknown[]>[] = [
       name: 'defaultSub',
       default: 'en-US'
     },
-    transformer: (value: string): LanguageItem => {
+    transformer: (value: string | unknown): LanguageItem => {
+      const val = value as string;
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      return require('./module.langsData').findLangByAnyCode(value)!;
+      return require('./module.langsData').findLangByAnyCode(val)!;
     },
   },
 	{

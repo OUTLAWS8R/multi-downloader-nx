@@ -113,10 +113,10 @@ export default class Crunchy implements ServiceClass {
 		} else if (argv.series && argv.series.match(/^[0-9A-Z]{9,}$/)) {
 			await this.refreshToken();
 			await this.logSeriesById(argv.series as string);
-			const selected = await this.downloadFromSeriesID(argv.series, { ...argv });
+			const selected = await this.downloadFromSeriesID(argv.series, { ...argv } as CrunchyDownloadOptions);
 			if (selected.isOk) {
 				for (const select of selected.value) {
-					if (!(await this.downloadEpisode(select, { ...argv, skipsubs: false }, true))) {
+					if (!(await this.downloadEpisode(select, { ...argv, skipsubs: false } as CrunchyDownloadOptions, true))) {
 						console.error(`Unable to download selected episode ${select.episodeNumber}`);
 						return false;
 					}
@@ -144,7 +144,7 @@ export default class Crunchy implements ServiceClass {
 			const selected = await this.getSeasonById(argv.s, argv.numbers, argv.e, argv.but, argv.all);
 			if (selected.isOk) {
 				for (const select of selected.value) {
-					if (!(await this.downloadEpisode(select, { ...argv, skipsubs: false }))) {
+					if (!(await this.downloadEpisode(select, { ...argv, skipsubs: false } as CrunchyDownloadOptions))) {
 						console.error(`Unable to download selected episode ${select.episodeNumber}`);
 						return false;
 					}
@@ -159,7 +159,7 @@ export default class Crunchy implements ServiceClass {
 			argv.dubLang = [argv.dubLang[0]];
 			const selected = await this.getObjectById(argv.e, false);
 			for (const select of selected as Partial<CrunchyEpMeta>[]) {
-				if (!(await this.downloadEpisode(select as CrunchyEpMeta, { ...argv, skipsubs: false }))) {
+				if (!(await this.downloadEpisode(select as CrunchyEpMeta, { ...argv, skipsubs: false } as CrunchyDownloadOptions))) {
 					console.error(`Unable to download selected episode ${select.episodeNumber}`);
 					return false;
 				}
@@ -173,7 +173,7 @@ export default class Crunchy implements ServiceClass {
 			argv.dubLang = [argv.dubLang[0]];
 			const selected = await this.getObjectById(argv.extid, false, true);
 			for (const select of selected as Partial<CrunchyEpMeta>[]) {
-				if (!(await this.downloadEpisode(select as CrunchyEpMeta, { ...argv, skipsubs: false }))) {
+				if (!(await this.downloadEpisode(select as CrunchyEpMeta, { ...argv, skipsubs: false } as CrunchyDownloadOptions))) {
 					console.error(`Unable to download selected episode ${select.episodeNumber}`);
 					return false;
 				}
@@ -1626,6 +1626,7 @@ export default class Crunchy implements ServiceClass {
 						console.warn(`[WARN] Selected language not found. Falling back to original audio: ${fallbackVersion.audio_locale}`);
 						currentVersion = fallbackVersion;
 						
+						// Update the language metadata so the filename is correct (e.g. says Japanese instead of English)
 						const fallbackLang = langsData.languages.find((a) => a.cr_locale == fallbackVersion.audio_locale);
 						if (fallbackLang) {
 							mMeta.lang = fallbackLang;
@@ -2837,7 +2838,8 @@ export default class Crunchy implements ServiceClass {
 								if (subsItem.format == 'vtt') {
 									if (!options.noASSConv) {
 										const chosenFontSize = options.originalFontSize ? undefined : options.fontSize;
-										if (!options.originalFontSize) sBody = sBody.replace(/( font-size:.+?;)/g, '').replace(/(font-size:.+?;)/g, '');
+
+                                        // vtt2ass now handles font size overriding logic safely.
 										sBody = vtt2ass(undefined, chosenFontSize, sBody, '', undefined, options.fontName);
 										sxData.fonts = fontsData.assFonts(sBody) as Font[];
 										sxData.file = sxData.file.replace('.vtt', '.ass');

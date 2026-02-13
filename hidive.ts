@@ -36,7 +36,8 @@ import { NewHidiveEpisode } from './@types/newHidiveEpisode';
 import { NewHidivePlayback, Subtitle } from './@types/newHidivePlayback';
 import { MPDParsed, parse } from './modules/module.transform-mpd';
 import { canDecrypt, getKeysWVD, cdm, getKeysPRD } from './modules/cdm';
-import { KeyContainer } from './modules/widevine/license';
+import { FetchParams } from './modules/module.fetch';
+import { KeyContainer } from 'widevine'; 
 
 export default class Hidive implements ServiceClass { 
   public cfg: yamlCfg.ConfigObject;
@@ -140,7 +141,7 @@ export default class Hidive implements ServiceClass {
     const apiReqOpts: reqModule.Params = {
       method: options.method,
       headers: options.headers as Record<string, string>,
-      body: options.body as string
+      body: options.body as any
     };
     let apiReq = await this.req.getData(options.url, apiReqOpts);
     if(!apiReq.ok || !apiReq.res){
@@ -527,7 +528,7 @@ export default class Hidive implements ServiceClass {
 
     const availableAudios = episodeData.offlinePlaybackLanguages
         .map(apiCode => langsData.languages.find(lang => lang.hidive_audio_code === apiCode)?.name)
-        .filter(Boolean) // Remove any undefined names if a mapping doesn't exist
+        .filter(Boolean)
         .join('\n\t\t');
     console.info('\tAudios: ' + (availableAudios.length > 0 ? '\n\t\t' + availableAudios : ''));
     
@@ -740,12 +741,14 @@ export default class Hidive implements ServiceClass {
     });
     const chosenAudios: typeof audios[0][] = [];
     const audioByLanguage: Record<string,typeof audios[0][]> = {};
+    
     for (const audio of audios) {
-      if (!audioByLanguage[audio.language.code]) audioByLanguage[audio.language.code] = [];
-      audioByLanguage[audio.language.code].push(audio);
+      const code = audio.language.hidive_audio_code || audio.language.code;
+      if (!audioByLanguage[code]) audioByLanguage[code] = [];
+      audioByLanguage[code].push(audio);
     }
 
-    // 1. Primary Selection: Use the 'hidive_audio_code' for a direct match
+    // 1. Primary Selection
     for (const requestedLangCode of options.dubLang as string[]) {
         const langConfig = langsData.languages.find(l => l.code === requestedLangCode);
 
@@ -764,36 +767,33 @@ export default class Hidive implements ServiceClass {
         }
     }
     
-    // 2. Fallback Logic: Only if no direct match was found, use the bandwidth heuristic
+    // 2. Fallback Logic
     if (chosenAudios.length == 0) {
       console.warn(`Could not find a direct match for selected audio language(s). Using fallback logic.`);
       if (audios.length > 0) {
-        // Assume the original language is the one with the lowest bandwidth.
         const sortedAudios = [...audios].sort((a,b) => a.bandwidth - b.bandwidth);
         
-        const targetLangCode = sortedAudios[0].language.code;
+        const targetLangCode = sortedAudios[0].language.hidive_audio_code || sortedAudios[0].language.code;
         const audiosToUse = audioByLanguage[targetLangCode];
 
-        let chosenAudioQuality = options.q === 0 ? audiosToUse.length : options.q;
-        if(chosenAudioQuality > audiosToUse.length) {
-          chosenAudioQuality = audiosToUse.length;
-        }
-        chosenAudioQuality--;
+        if (audiosToUse) {
+            let chosenAudioQuality = options.q === 0 ? audiosToUse.length : options.q;
+            if(chosenAudioQuality > audiosToUse.length) {
+            chosenAudioQuality = audiosToUse.length;
+            }
+            chosenAudioQuality--;
 
-        // Get the selected audio object
-        const chosenAudio = audiosToUse[chosenAudioQuality];
-        if (chosenAudio.language.code === 'und') {
-          console.warn('Assuming "und" audio track is Japanese.');
-          // Find the correct Japanese language object from data module
-          const japaneseLang = langsData.findLangByAnyCode('jpn'); 
-          if (japaneseLang) {
-            // Overwrite the incorrect 'und' language object with the correct Japanese one
-            chosenAudio.language = japaneseLang;
-          }
+            const chosenAudio = audiosToUse[chosenAudioQuality];
+            if (chosenAudio.language.code === 'und') {
+                console.warn('Assuming "und" audio track is Japanese.');
+                const japaneseLang = langsData.findLangByAnyCode('jpn'); 
+                if (japaneseLang) {
+                    chosenAudio.language = japaneseLang;
+                }
+            }
+            chosenAudios.push(chosenAudio);
+            console.info(`Using audio track with language code '${targetLangCode}' based on lowest bandwidth heuristic.`);
         }
-
-        chosenAudios.push(chosenAudio);
-        console.info(`Using audio track with language code '${targetLangCode}' based on lowest bandwidth heuristic.`);
       }
     }
 
@@ -1029,7 +1029,8 @@ export default class Hidive implements ServiceClass {
             const getVttContent = await this.req.getData(sub.url);
             if (getVttContent.ok && getVttContent.res) {
               console.info(`Subtitle Downloaded: ${sub.url}`);
-              //vttConvert(getVttContent.res.body, false, subLang.name, fontSize);
+              // FIXED: Removed the manual regex replace line. vtt2ass handles the font size logic safely now.
+              // Note: chosenFontSize is passed directly to vtt2ass.
               const sBody = vtt2ass(undefined, chosenFontSize, await getVttContent.res.text(), '', subsMargin, options.fontName, options.combineLines);
               sxData.title = `${subLang.language} / ${sxData.title}`;
               sxData.fonts = fontsData.assFonts(sBody) as Font[];
