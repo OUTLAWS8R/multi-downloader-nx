@@ -1,12 +1,13 @@
 // build-in
 import path from 'path';
-import fs from 'fs';
+import fs from 'fs-extra';
 
 // package program
 import packageJson from './package.json';
 
 // plugins
 import { console } from './modules/log';
+import m3u8 from 'm3u8-parsed';
 import streamdl, { M3U8Json } from './modules/hls-download';
 import Helper from './modules/module.helper';
 import { Parser } from 'm3u8-parser';
@@ -1619,6 +1620,19 @@ export default class Crunchy implements ServiceClass {
 				} else if (mMeta.versions.length == 1) {
 					currentVersion = mMeta.versions[0];
 				}
+				if (!currentVersion) {
+					const fallbackVersion = mMeta.versions.find((a) => a.original);
+					if (fallbackVersion) {
+						console.warn(`[WARN] Selected language not found. Falling back to original audio: ${fallbackVersion.audio_locale}`);
+						currentVersion = fallbackVersion;
+						
+						const fallbackLang = langsData.languages.find((a) => a.cr_locale == fallbackVersion.audio_locale);
+						if (fallbackLang) {
+							mMeta.lang = fallbackLang;
+						}
+					}
+				}
+
 				if (!currentVersion?.media_guid) {
 					console.error('Selected language not found in versions.');
 					continue;
@@ -1675,22 +1689,27 @@ export default class Crunchy implements ServiceClass {
 
 					//Make a format more usable for the crunchy chapters
 					for (const chapter in chapterData) {
-						if (chapterData[chapter] && typeof chapterData[chapter] == 'object') {
+						if (typeof chapterData[chapter] == 'object') {
 							chapters.push(chapterData[chapter]);
 						}
 					}
 
 					if (chapters.length > 0) {
-						chapters.sort((a, b) => a.start - b.start);
+						// Filter out null/undefined chapters or chapters with missing timestamps before sorting
+						const validChapters = chapters.filter(c => c && typeof c.start === 'number' && typeof c.end === 'number');
+
+						validChapters.sort((a, b) => a.start - b.start);
+
 						//Check if chapters has an intro
-						//if (!(chapters.find(c => c.type === 'intro') || chapters.find(c => c.type === 'recap'))) {
-						if (!chapters.find((c) => c.type === 'intro')) {
+						if (!validChapters.find((c) => c.type === 'intro')) {
 							compiledChapters.push(`CHAPTER${compiledChapters.length / 2 + 1}=00:00:00.00`, `CHAPTER${compiledChapters.length / 2 + 1}NAME=Episode`);
 						}
 
 						//Loop through all the chapters
-						for (const chapter of chapters) {
-							if (typeof chapter.start == 'undefined' || typeof chapter.end == 'undefined') continue;
+						for (const chapter of validChapters) {
+							// Redundant check removed since we filtered above
+							// if (typeof chapter.start == 'undefined' || typeof chapter.end == 'undefined') continue;
+
 							//Generate timestamps
 							const startTime = new Date(0),
 								endTime = new Date(0);
@@ -1699,7 +1718,7 @@ export default class Crunchy implements ServiceClass {
 							const startFormatted = startTime.toISOString().substring(11, 19) + '.00';
 							const endFormatted = endTime.toISOString().substring(11, 19) + '.00';
 							//Find the max start time from the chapters
-							const maxStart = Math.max(...chapters.map((obj) => obj.start).filter((start): start is number => start !== null && start !== undefined));
+							const maxStart = Math.max(...validChapters.map((obj) => obj.start).filter((start): start is number => start !== null && start !== undefined));
 							//We need the duration of the ep
 							let epDuration: number | undefined;
 							const epiMeta = await this.req.getData(
@@ -2083,19 +2102,13 @@ export default class Crunchy implements ServiceClass {
 					await this.refreshToken(true, true);
 					await this.req.getData(
 						`https://cr-play-service.prd.crunchyrollsvc.com/v1/token/${currentVersion ? currentVersion.guid : currentMediaId}/${videoStream.token}`,
-						{
-							...{ method: 'DELETE' },
-							...AuthHeaders
-						}
+						{ ...{ method: 'DELETE' }, ...AuthHeaders }
 					);
 				}
 				if (audioStream && videoStream?.token !== audioStream.token) {
 					await this.req.getData(
 						`https://cr-play-service.prd.crunchyrollsvc.com/v1/token/${currentVersion ? currentVersion.guid : currentMediaId}/${audioStream.token}`,
-						{
-							...{ method: 'DELETE' },
-							...AuthHeaders
-						}
+						{ ...{ method: 'DELETE' }, ...AuthHeaders }
 					);
 				}
 			}
@@ -2160,23 +2173,34 @@ export default class Crunchy implements ServiceClass {
 							return a.bandwidth - b.bandwidth;
 						});
 
-						let chosenVideoQuality = options.q === 0 ? videos.length : options.q;
+						const requestedQ = parseInt(String(options.q || 0), 10);
+						
+						let chosenVideoQuality = requestedQ === 0 ? videos.length : requestedQ;
 						if (chosenVideoQuality > videos.length) {
 							console.warn(
-								`The requested quality of ${options.q} is greater than the maximum ${videos.length}.\n[WARN] Therefor the maximum will be capped at ${videos.length}.`
+								`The requested quality of ${requestedQ} is greater than the maximum ${videos.length}.\n[WARN] Therefor the maximum will be capped at ${videos.length}.`
 							);
 							chosenVideoQuality = videos.length;
 						}
+						// Ensure index doesn't go below 1 (which maps to array index 0)
+						if (chosenVideoQuality < 1) chosenVideoQuality = 1;
 						chosenVideoQuality--;
 
-						let chosenAudioQuality = options.q === 0 ? audios.length : options.q;
+						let chosenAudioQuality = requestedQ === 0 ? audios.length : requestedQ;
 						if (chosenAudioQuality > audios.length) {
 							chosenAudioQuality = audios.length;
 						}
+						if (chosenAudioQuality < 1) chosenAudioQuality = 1;
 						chosenAudioQuality--;
 
 						const chosenVideoSegments = videos[chosenVideoQuality];
 						const chosenAudioSegments = audios[chosenAudioQuality];
+                        
+                        // Safety check for crash prevention
+						if (!chosenVideoSegments) {
+							console.error(`[ERROR] Failed to select video quality. Index: ${chosenVideoQuality}, Available: ${videos.length}`);
+							return undefined;
+						}
 
 						console.info(`Available Video Qualities:\n\t${videos.map((a, ind) => `[${ind + 1}] ${a.resolutionText}`).join('\n\t')}`);
 						console.info(`Available Audio Qualities:\n\t${audios.map((a, ind) => `[${ind + 1}] ${a.resolutionText}`).join('\n\t')}`);
@@ -2654,16 +2678,7 @@ export default class Crunchy implements ServiceClass {
 								}
 
 								const chunkPageBody = await chunkPage.res.text();
-								// Init parser
-								const parser = new Parser();
-
-								// Parse M3U8
-								parser.push(chunkPageBody);
-								parser.end();
-
-								const chunkPlaylist = parser.manifest;
-								if (!chunkPlaylist) throw Error('Failed to parse M3U8');
-
+								const chunkPlaylist = m3u8(chunkPageBody);
 								const totalParts = chunkPlaylist.segments.length;
 								const mathParts = Math.ceil(totalParts / options.partsize);
 								const mathMsg = `(${mathParts}*${options.partsize})`;
@@ -2819,20 +2834,18 @@ export default class Crunchy implements ServiceClass {
 							});
 							if (subsAssReq.ok && subsAssReq.res) {
 								let sBody = await subsAssReq.res.text();
-
-								if (subsItem.format === 'vtt') {
+								if (subsItem.format == 'vtt') {
 									if (!options.noASSConv) {
 										const chosenFontSize = options.originalFontSize ? undefined : options.fontSize;
 										if (!options.originalFontSize) sBody = sBody.replace(/( font-size:.+?;)/g, '').replace(/(font-size:.+?;)/g, '');
 										sBody = vtt2ass(undefined, chosenFontSize, sBody, '', undefined, options.fontName);
+										sxData.fonts = fontsData.assFonts(sBody) as Font[];
 										sxData.file = sxData.file.replace('.vtt', '.ass');
 									} else {
 										// Yeah, whatever
 										sxData.fonts = [];
 									}
-								}
-
-								if (!options.noASSConv || subsItem.format !== 'vtt') {
+								} else {
 									// Extract PlayRes
 									const mX = sBody.match(/^PlayResX:\s*(\d+)/m);
 									const mY = sBody.match(/^PlayResY:\s*(\d+)/m);
