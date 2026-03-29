@@ -14,6 +14,7 @@ let fontSize = 0;
 let tmMrg = 0;
 let rFont = '';
 let doCombineLines = false;
+let isCustomFontSize = false; // <--- ADDED: Flag to detect if we should lock the font size
 
 type Css = Record<
 	string,
@@ -81,6 +82,7 @@ function parseStyle(stylegroup: string, line: string, style: any) {
 
 	if (stylegroup.startsWith('Subtitle') || stylegroup.startsWith('Song') || stylegroup.startsWith('Q') || stylegroup.startsWith('Default')) {
 		//base for dialog, everything else use defaultStyle
+		// This uses the global 'fontSize' which is set to your custom size in vtt2ass()
 		style = `${defaultSFont},${fontSize},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2.6,0,2,20,20,46,1`;
 	}
 
@@ -111,12 +113,20 @@ function parseStyle(stylegroup: string, line: string, style: any) {
 				}
 				break;
 			case 'font-size':
-				style[1] = getPxSize(st[1], style[1]); //scale it based on input style size... so for dialog, this is the dialog font size set in config, for non dialog, it's 40 from default font size
+				// === IMPROVEMENT START ===
+				// If the user provided a custom font size (isCustomFontSize is true),
+				// we completely IGNORE what the VTT file says about size.
+				if (!isCustomFontSize) {
+					style[1] = getPxSize(st[1], style[1]); 
+				}
+				// === IMPROVEMENT END ===
 				break;
 			case 'color':
 				cl = getColor(st[1]);
 				if (cl !== null) {
 					if (cl == '&H0000FFFF') {
+						// This converts YELLOW to WHITE. 
+						// If you want Yellow, comment out the line below.
 						style[2] = style[3] = '&H00FFFFFF';
 					} else {
 						style[2] = style[3] = cl;
@@ -318,7 +328,7 @@ function convert(css: Css, vtt: Vtt[]) {
 	const stylesMap: Record<string, string> = {};
 	let ass = [
 		'\ufeff[Script Info]',
-		'Title: ' + relGroup,
+		'Title: [DKB Team]' + relGroup,
 		'ScriptType: v4.00+',
 		'WrapStyle: 0',
 		'PlayResX: 1280',
@@ -522,7 +532,16 @@ export default function vtt2ass(
 	combineLines?: boolean
 ) {
 	relGroup = group ?? '';
-	fontSize = xFontSize && xFontSize > 0 ? xFontSize : 34; // 1em to pix
+	
+	// === CHECK: Is a custom size requested? ===
+	if (xFontSize && xFontSize > 0) {
+		fontSize = xFontSize;
+		isCustomFontSize = true;
+	} else {
+		fontSize = 34; // Default
+		isCustomFontSize = false;
+	}
+	
 	tmMrg = timeMargin ? timeMargin : 0; //
 	rFont = replaceFont ? replaceFont : rFont;
 	doCombineLines = combineLines ? combineLines : doCombineLines;
@@ -531,10 +550,7 @@ export default function vtt2ass(
 		let defaultCss = '';
 		const cssGroups = vttStr.matchAll(/::cue(?:.(.+)\) *)?{([^}]+)}/g);
 		for (const cssGroup of cssGroups) {
-			//Below code will bulldoze defined sizes for custom ones
-			/*if (!options.originalFontSize) {
-        cssGroup[2] = cssGroup[2].replace(/( font-size:.+?;)/g, '').replace(/(font-size:.+?;)/g, '');
-      }*/
+			// Removed the regex stripping. We handle this in parseStyle now.
 			if (cssGroup[1]) {
 				cssLines.push(`${cssGroup[1]}{${defaultCss}${cssGroup[2].replace(/(\r\n|\n|\r)/gm, '')}}`);
 			} else {
