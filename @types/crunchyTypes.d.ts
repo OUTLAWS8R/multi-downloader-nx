@@ -53,6 +53,8 @@ export type CrunchyDownloadOptions = {
 	scaledBorderAndShadow: 'yes' | 'no';
 	originalScriptFix: boolean;
 	subtitleTimestampFix: boolean;
+	proxy?: string;
+    proxyAll?: boolean;
 };
 
 export type CrunchyMultiDownload = {
