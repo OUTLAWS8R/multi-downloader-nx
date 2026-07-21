@@ -404,7 +404,7 @@ export default class Hidive implements ServiceClass {
     const showData = getShowData.value;
     const doEpsFilter = parseSelect(e as string);
 
-    console.info('\nFull Episode List (Use # for selection with -e):');
+    console.info('\nFull Episode List (For selection use -e):');
     
     const selEpsArr: NewHidiveEpisodeExtra[] = [];
     let ovaSeq = 1;

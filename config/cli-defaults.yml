@@ -15,11 +15,11 @@ keepAllVideos: false
 # What to use as the file name template
 fileName: '[${service}] ${showTitle} - S${season}E${episode} [${height}p]'
 # What Audio languages to download
-dubLang: ['jpn']
+dubLang: ['ja-JP']
 # What Subtitle languages to download
 dlsubs: ['all']
 # What language Audio to set as default
-defaultAudio: 'jpn'
+defaultAudio: 'ja-JP'
 # Video Playback Endpoint (Crunchyroll)
 vstream: 'androidtv'
 # Audio Playback Endpoint (Crunchyroll)
