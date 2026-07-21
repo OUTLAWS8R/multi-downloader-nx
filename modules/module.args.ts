@@ -1,4 +1,5 @@
-import { dubLanguageCodes, languages, searchLocales, subtitleLanguagesFilter } from './module.langsData';
+import type { LanguageItem } from './module.langsData';
+import { languages, searchLocales, subtitleLanguagesFilter, allLanguageIdentifiers } from './module.langsData';
 import { CrunchyVideoPlayStreams, CrunchyAudioPlayStreams } from '../@types/enums';
 
 const groups = {
@@ -508,24 +509,32 @@ const args: TAppArg<boolean | number | string | unknown[]>[] = [
 		type: 'boolean',
 		usage: ''
 	},
-	{
-		name: 'dubLang',
-		describe:
-			'Set the language to download: ' +
-			`\nCrunchy Only: ${languages
-				.filter((a) => a.cr_locale)
-				.map((a) => a.code)
-				.join(', ')}`,
-		docDescribe: true,
-		group: 'dl',
-		choices: dubLanguageCodes,
-		default: {
-			default: [dubLanguageCodes.slice(-1)[0]]
-		},
-		service: ['all'],
-		type: 'array',
-		usage: '${dub1} ${dub2}'
-	},
+  {
+    name: 'dubLang',
+    describe: 'Set the language to download by its tag (e.g., ja-JP, en-US)',
+    docDescribe: true,
+    group: 'dl',
+    choices: allLanguageIdentifiers, 
+    default: {
+      name: 'dubLang',
+      default: [ 'ja-JP' ]
+    },
+    service: ['all'],
+    type: 'array',
+    usage: '${dub1} ${dub2}',
+    transformer: (values: string[] | unknown): string[] => {
+      const val = values as string[];
+      const { findLangByAnyCode } = require('./module.langsData');
+      return val.map(v => {
+        if (v === 'all') return v;
+        const item = findLangByAnyCode(v);
+        if (!item) {
+          throw new Error(`Unable to find language for tag ${v}!`);
+        }
+        return item.code;
+      });
+    }
+  },
 	{
 		name: 'all',
 		describe: 'Used to download all episodes from the show',
@@ -977,44 +986,42 @@ const args: TAppArg<boolean | number | string | unknown[]>[] = [
 			default: []
 		}
 	},
-	{
-		name: 'defaultAudio',
-		describe: `Set the default audio track by language code\nPossible Values: ${languages.map((a) => a.code).join(', ')}`,
-		docDescribe: true,
-		group: 'mux',
-		service: ['all'],
-		type: 'string',
-		usage: '${args}',
-		default: {
-			default: 'eng'
-		},
-		transformer: (val) => {
-			const item = languages.find((a) => a.code === val);
-			if (!item) {
-				throw new Error(`Unable to find language code ${val}!`);
-			}
-			return item;
-		}
-	},
-	{
-		name: 'defaultSub',
-		describe: `Set the default subtitle track by language code\nPossible Values: ${languages.map((a) => a.code).join(', ')}`,
-		docDescribe: true,
-		group: 'mux',
-		service: ['all'],
-		type: 'string',
-		usage: '${args}',
-		default: {
-			default: 'eng'
-		},
-		transformer: (val) => {
-			const item = languages.find((a) => a.code === val);
-			if (!item) {
-				throw new Error(`Unable to find language code ${val}!`);
-			}
-			return item;
-		}
-	},
+  {
+    name: 'defaultAudio',
+    describe: `Set the default audio track by language tag\nPossible Values: ${allLanguageIdentifiers.join(', ')}`,
+    docDescribe: true,
+    group: 'mux',
+    service: ['all'],
+    type: 'string',
+    usage: '${args}',
+    default: {
+      name: 'defaultAudio',
+      default: 'ja-JP'
+    },
+    transformer: (value: string | unknown): LanguageItem => {
+      const val = value as string;
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      return require('./module.langsData').findLangByAnyCode(val)!;
+    },
+  },
+  {
+    name: 'defaultSub',
+    describe: `Set the default subtitle track by language tag\nPossible Values: ${allLanguageIdentifiers.join(', ')}`,
+    docDescribe: true,
+    group: 'mux',
+    service: ['all'],
+    type: 'string',
+    usage: '${args}',
+    default: {
+      name: 'defaultSub',
+      default: 'en-US'
+    },
+    transformer: (value: string | unknown): LanguageItem => {
+      const val = value as string;
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      return require('./module.langsData').findLangByAnyCode(val)!;
+    },
+  },
 	{
 		name: 'ccTag',
 		describe: 'Used to set the name for subtitles that contain tranlations for none verbal communication (e.g. signs)',
@@ -1027,7 +1034,7 @@ const args: TAppArg<boolean | number | string | unknown[]>[] = [
 			default: 'cc'
 		}
 	},
-	{
+    {
 		name: 'proxy',
 		describe: 'Uses Proxy on geo-restricted or geo-defining endpoints (e.g. https://127.0.0.1:1080 or http://127.0.0.1:1080)',
 		docDescribe: true,

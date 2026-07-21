@@ -14,6 +14,9 @@ let fontSize = 0;
 let tmMrg = 0;
 let rFont = '';
 let doCombineLines = false;
+let isCustomFontSize = false;
+let mainDialogueStyle = '';
+let mainDialogueFontSize = '';
 
 type Css = Record<
 	string,
@@ -46,8 +49,9 @@ function loadCSS(cssStr: string): Css {
 			params: string;
 			list: string[];
 		}
-	> = { [defaultStyleName]: { params: defaultStyle, list: [] } };
+	> = { [defaultStyleName]: { params: defaultStyle, list:[] } };
 	const classList: Record<string, number> = { [defaultStyleName]: 1 };
+	
 	for (const i in css) {
 		let clx, clz, clzx, rgx;
 		const l = css[i];
@@ -77,18 +81,16 @@ function loadCSS(cssStr: string): Css {
 }
 
 function parseStyle(stylegroup: string, line: string, style: any) {
-	const defaultSFont = rFont == '' ? defaultStyleFont : rFont; //redeclare cause of let
+	const defaultSFont = rFont == '' ? defaultStyleFont : rFont;
 
-	if (stylegroup.startsWith('Subtitle') || stylegroup.startsWith('Song') || stylegroup.startsWith('Q') || stylegroup.startsWith('Default')) {
-		//base for dialog, everything else use defaultStyle
+	// Check if this style is for standard dialogue or something that might be positioned
+	const isStandardDialogue = stylegroup.startsWith('Subtitle') || stylegroup.startsWith('Song') || stylegroup.startsWith('Default');
+
+	if (isStandardDialogue || stylegroup.startsWith('Q')) {
+		// Apply global settings initially
 		style = `${defaultSFont},${fontSize},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2.6,0,2,20,20,46,1`;
 	}
 
-	// Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
-	// BackColour, Bold, Italic, Underline, StrikeOut,
-	// ScaleX, ScaleY, Spacing, Angle, BorderStyle,
-	// Outline, Shadow, Alignment, MarginL, MarginR,
-	// MarginV, Encoding
 	style = style.split(',');
 	for (const s of line.split(';')) {
 		if (s == '') continue;
@@ -99,37 +101,31 @@ function parseStyle(stylegroup: string, line: string, style: any) {
 		switch (st[0]) {
 			case 'font-family':
 				if (rFont != '') {
-					//do rewrite if rFont is specified
-					if (stylegroup.startsWith('Subtitle') || stylegroup.startsWith('Song')) {
-						style[0] = rFont; //dialog to rFont
+					if (isStandardDialogue) {
+						style[0] = rFont;
 					} else {
-						style[0] = defaultStyleFont; //non-dialog to Arial
+						style[0] = defaultStyleFont;
 					}
 				} else {
-					//otherwise keep default style
 					style[0] = st[1].match(/[\s"]*([^",]*)/)![1];
 				}
 				break;
 			case 'font-size':
-				style[1] = getPxSize(st[1], style[1]); //scale it based on input style size... so for dialog, this is the dialog font size set in config, for non dialog, it's 40 from default font size
+				// Only override the size if it's standard dialogue. If it's a Q-style (HiDive Caption/Sign),
+				if (!isCustomFontSize || (!isStandardDialogue && stylegroup.startsWith('Q'))) {
+					style[1] = getPxSize(st[1], style[1]); 
+				}
 				break;
 			case 'color':
 				cl = getColor(st[1]);
 				if (cl !== null) {
-					if (cl == '&H0000FFFF') {
-						style[2] = style[3] = '&H00FFFFFF';
-					} else {
-						style[2] = style[3] = cl;
-					}
+					style[2] = style[3] = cl;
 				}
 				break;
 			case 'font-weight':
-				if (stylegroup.startsWith('Subtitle') || stylegroup.startsWith('Song')) {
-					//don't touch font-weight if dialog
+				if (isStandardDialogue) {
 					break;
 				}
-				// console.info("Changing bold weight");
-				// console.info(stylegroup);
 				if (st[1] === 'bold') {
 					style[6] = -1;
 					break;
@@ -164,8 +160,7 @@ function parseStyle(stylegroup: string, line: string, style: any) {
 				}
 				break;
 			case 'text-shadow':
-				if (stylegroup.startsWith('Subtitle') || stylegroup.startsWith('Song')) {
-					//don't touch shadow if dialog
+				if (isStandardDialogue) {
 					break;
 				}
 				arr = transformed_str = st[1].split(',').map((r) => r.trim());
@@ -197,6 +192,11 @@ function parseStyle(stylegroup: string, line: string, style: any) {
 				console.error(`VTT2ASS: Unknown style: ${s.trim()}`);
 		}
 	}
+
+	if (mainDialogueStyle !== '' && stylegroup === mainDialogueStyle) {
+		style[2] = style[3] = '&H00FFFFFF'; // White (Primary/Secondary Color)
+	}
+
 	return style.join(',');
 }
 
@@ -225,9 +225,9 @@ function getColor(c: string) {
 function loadVTT(vttStr: string): Vtt[] {
 	const rx = /^([\d:.]*) --> ([\d:.]*)\s?(.*?)\s*$/;
 	const lines = vttStr.replace(/\r?\n/g, '\n').split('\n');
-	const data = [];
+	const data =[];
 	let record: null | Vtt = null;
-	let lineBuf = [];
+	let lineBuf =[];
 	for (const l of lines) {
 		const m = l.match(rx);
 		if (m) {
@@ -253,7 +253,7 @@ function loadVTT(vttStr: string): Vtt[] {
 						.reduce((p, c) => ((p as any)[c[0]] = c[1] ?? 'invalid-input') && p, {})
 				}
 			};
-			lineBuf = [];
+			lineBuf =[];
 			continue;
 		}
 		lineBuf.push(l);
@@ -284,7 +284,7 @@ function combineLines(events: string[]): string[] {
 		return events;
 	}
 	// This function is for combining adjacent lines with same information
-	const newLines: string[] = [];
+	const newLines: string[] =[];
 	for (const currentLine of events) {
 		let hasCombined: boolean = false;
 		// Check previous 7 elements, arbritary lookback amount
@@ -309,7 +309,10 @@ function combineLines(events: string[]): string[] {
 
 function pushBuffer(buffer: ReturnType<typeof convertLine>[], events: string[]) {
 	buffer.reverse();
-	const bufferStrings: string[] = buffer.map((line) => `Dialogue: 1,${line.start},${line.end},${line.style},,0,0,0,,${line.text}`);
+	const bufferStrings: string[] = buffer.map((line, index) => {
+		const verticalMargin = index > 0 ? (fontSize * index) + 20 : 0;
+		return `Dialogue: 1,${line.start},${line.end},${line.style},,0,0,${verticalMargin},,${line.text}`;
+	});
 	events.push(...bufferStrings);
 	buffer.splice(0, buffer.length);
 }
@@ -318,7 +321,7 @@ function convert(css: Css, vtt: Vtt[]) {
 	const stylesMap: Record<string, string> = {};
 	let ass = [
 		'\ufeff[Script Info]',
-		'Title: ' + relGroup,
+		'Title: [DKB Team]' + relGroup,
 		'ScriptType: v4.00+',
 		'WrapStyle: 0',
 		'PlayResX: 1280',
@@ -339,14 +342,14 @@ function convert(css: Css, vtt: Vtt[]) {
 		capt_pos: string[];
 		song_cap: string[];
 	} = {
-		subtitle: [],
+		subtitle:[],
 		caption: [],
-		capt_pos: [],
-		song_cap: []
+		capt_pos:[],
+		song_cap:[]
 	};
 	const linesMap: Record<string, number> = {};
-	const buffer: ReturnType<typeof convertLine>[] = [];
-	const captionsBuffer: string[] = [];
+	const buffer: ReturnType<typeof convertLine>[] =[];
+	const captionsBuffer: string[] =[];
 	for (const l in vtt) {
 		const x = convertLine(stylesMap, vtt[l]);
 		if (x.ind !== '' && linesMap[x.ind] !== undefined) {
@@ -363,11 +366,7 @@ function convert(css: Css, vtt: Vtt[]) {
 				linesMap[x.ind] = events[x.type as keyof typeof events].length - 1;
 			}
 		}
-		/**
-		 * What cursed code have I brought upon this land?
-		 * This handles making lines multi-line when neccesary and reverses
-		 * order of subtitles so that they display correctly
-		 */
+
 		if (x.type != 'subtitle') {
 			// Do nothing
 		} else if (x.text.includes('\\pos')) {
@@ -400,25 +399,21 @@ function convert(css: Css, vtt: Vtt[]) {
 
 	if (events.subtitle.length > 0) {
 		ass = ass.concat(
-			//`Comment: 0,0:00:00.00,0:00:00.00,${defaultStyleName},,0,0,0,,** Subtitles **`,
 			events.subtitle
 		);
 	}
 	if (events.caption.length > 0) {
 		ass = ass.concat(
-			//`Comment: 0,0:00:00.00,0:00:00.00,${defaultStyleName},,0,0,0,,** Captions **`,
 			events.caption
 		);
 	}
 	if (events.capt_pos.length > 0) {
 		ass = ass.concat(
-			//`Comment: 0,0:00:00.00,0:00:00.00,${defaultStyleName},,0,0,0,,** Captions with position **`,
 			events.capt_pos
 		);
 	}
 	if (events.song_cap.length > 0) {
 		ass = ass.concat(
-			//`Comment: 0,0:00:00.00,0:00:00.00,${defaultStyleName},,0,0,0,,** Song captions **`,
 			events.song_cap
 		);
 	}
@@ -430,37 +425,75 @@ function convertLine(css: Record<string, string>, l: Record<any, any>) {
 	const end = convertTime(l.time.end);
 	const txt = convertText(l.text);
 	let type = txt.style.match(/Caption/i) ? 'caption' : txt.style.match(/SongCap/i) ? 'song_cap' : 'subtitle';
-	type = type == 'caption' && l.time.ext?.position !== undefined ? 'capt_pos' : type;
-	if (l.time.ext?.align === 'left') {
-		txt.text = `{\\an7}${txt.text}`;
+
+	let alignTag = '';
+	
+	if (l.time.ext?.position !== undefined) {
+		alignTag = '{\\an8}'; // Default to top-center if position is given
+		if (l.time.ext?.align === 'left' || l.time.ext?.align === 'start') {
+			alignTag = '{\\an7}';
+		} else if (l.time.ext?.align === 'right' || l.time.ext?.align === 'end') {
+			alignTag = '{\\an9}';
+		}
 	}
+
 	let ind = '',
 		subInd = 1;
 	const sMinus = 0; // (19.2 * 2);
+
+	const bumpUpOffset = isCustomFontSize ? (fontSize * 1.5) : 65;
+	
+	const safeMiddle = 360; 
+	const safeBottomTarget = 720 - bumpUpOffset - 10; // Extra 10px breathing room to clear dialogue
+	const compressionScale = (safeBottomTarget - safeMiddle) / (720 - safeMiddle);
+
 	if (l.time.ext?.position !== undefined) {
 		const pos = parseInt(l.time.ext.position);
 		const PosX = pos < 0 ? (1280 / 100) * (100 - pos) : ((1280 - sMinus) / 100) * pos;
 		const line = parseInt(l.time.ext.line) || 0;
-		const PosY = line < 0 ? (720 / 100) * (100 - line) : ((720 - sMinus) / 100) * line;
-		txt.text = `{\\pos(${parseFloat(PosX.toFixed(3))},${parseFloat(PosY.toFixed(3))})}${txt.text}`;
+		let PosY = line < 0 ? (720 / 100) * (100 - line) : ((720 - sMinus) / 100) * line;
+		
+		// If the text is in the lower half of the screen, gently compress it upwards
+		if (PosY > safeMiddle) {
+			PosY = safeMiddle + (PosY - safeMiddle) * compressionScale;
+		}
+
+		txt.text = `{\\pos(${parseFloat(PosX.toFixed(3))},${parseFloat(PosY.toFixed(3))})}${alignTag}${txt.text}`;
+		type = 'capt_pos'; // Safely force to capt_pos
 	} else if (l.time.ext?.line !== undefined && type == 'caption') {
 		const line = parseInt(l.time.ext.line);
-		const PosY = line < 0 ? (720 / 100) * (100 - line) : ((720 - sMinus) / 100) * line;
-		txt.text = `{\\pos(640,${parseFloat(PosY.toFixed(3))})}${txt.text}`;
+		let PosY = line < 0 ? (720 / 100) * (100 - line) : ((720 - sMinus) / 100) * line;
+		
+		// Apply the same compression to vertically centered captions
+		if (PosY > safeMiddle) {
+			PosY = safeMiddle + (PosY - safeMiddle) * compressionScale;
+		}
+
+		txt.text = `{\\pos(640,${parseFloat(PosY.toFixed(3))})}${alignTag}${txt.text}`;
+		type = 'capt_pos';
 	} else {
+		// Prepend alignment tags if any exist
+		if (alignTag) {
+			txt.text = `${alignTag}${txt.text}`;
+		}
+
 		const indregx = txt.style.match(/(.*)_(\d+)$/);
 		if (indregx !== null) {
 			ind = indregx[1];
 			subInd = parseInt(indregx[2]);
 		}
 	}
+
+	if (type === 'subtitle' && txt.style !== mainDialogueStyle && mainDialogueStyle !== '') {
+		txt.text = `{\\c&H00FFFF&}{\\fs${mainDialogueFontSize}}` + txt.text;
+	}
+
 	const style = css[txt.style as any] || defaultStyleName;
 	const res = `Dialogue: 0,${start},${end},${style},,0,0,0,,${txt.text}`;
 	return { type, ind, subInd, start, end, style, text: txt.text, res };
 }
 
 function convertText(text: string) {
-	//const m = text.match(/<c\.([^>]*)>([\S\s]*)<\/c>/);
 	const m = text.match(/<(?:c\.|)([^>]*)>([\S\s]*)<\/(?:c|Default)>/);
 	let style = '';
 	if (m) {
@@ -468,10 +501,7 @@ function convertText(text: string) {
 		text = m[2];
 	}
 	const xtext = text
-		// .replace(/<c[^>]*>[^<]*<\/c>/g, '')
-		// .replace(/<ruby[^>]*>[^<]*<\/ruby>/g, '')
 		.replace(/ \\N$/g, '\\N')
-		//.replace(/<[^>]>/g, '')
 		.replace(/\\N$/, '')
 		.replace(/\r/g, '')
 		.replace(/\n/g, '\\N')
@@ -498,7 +528,7 @@ function convertTime(tm: string) {
 }
 
 function toSubTime(str: string) {
-	const n = [];
+	const n =[];
 	let sx;
 	const x: any[] = str.split(/[:.]/).map((x) => Number(x));
 	x[3] = '0.' + ('00' + x[3]).slice(-3);
@@ -522,27 +552,61 @@ export default function vtt2ass(
 	combineLines?: boolean
 ) {
 	relGroup = group ?? '';
-	fontSize = xFontSize && xFontSize > 0 ? xFontSize : 34; // 1em to pix
-	tmMrg = timeMargin ? timeMargin : 0; //
+	
+	// === CHECK: Is a custom size requested? ===
+	if (xFontSize && xFontSize > 0) {
+		fontSize = xFontSize;
+		isCustomFontSize = true;
+	} else {
+		fontSize = 34; // Default
+		isCustomFontSize = false;
+	}
+	
+	tmMrg = timeMargin ? timeMargin : 0; 
 	rFont = replaceFont ? replaceFont : rFont;
 	doCombineLines = combineLines ? combineLines : doCombineLines;
-	if (vttStr.match(/::cue(?:.(.+)\) *)?{([^}]+)}/g)) {
-		const cssLines = [];
+	
+	if (vttStr.match(/::cue(?:.(.+)\) *)?\{([^}]+)\}/g)) {
+		const cssLines =[];
 		let defaultCss = '';
-		const cssGroups = vttStr.matchAll(/::cue(?:.(.+)\) *)?{([^}]+)}/g);
+		const cssGroups = vttStr.matchAll(/::cue(?:.(.+)\) *)?\{([^}]+)\}/g);
 		for (const cssGroup of cssGroups) {
-			//Below code will bulldoze defined sizes for custom ones
-			/*if (!options.originalFontSize) {
-        cssGroup[2] = cssGroup[2].replace(/( font-size:.+?;)/g, '').replace(/(font-size:.+?;)/g, '');
-      }*/
 			if (cssGroup[1]) {
 				cssLines.push(`${cssGroup[1]}{${defaultCss}${cssGroup[2].replace(/(\r\n|\n|\r)/gm, '')}}`);
 			} else {
 				defaultCss = cssGroup[2].replace(/(\r\n|\n|\r)/gm, '');
-				//cssLines.push(`{${defaultCss}}`);
 			}
 		}
 		cssStr += cssLines.join('\r\n');
 	}
-	return convert(loadCSS(cssStr), loadVTT(vttStr));
+
+	const parsedVTT = loadVTT(vttStr);
+	const styleCounts: Record<string, number> = {};
+	
+	for (const cue of parsedVTT) {
+		// Detect if it's a sign by STRICTLY checking if it has horizontal `position` coordinates
+		const isSign = cue.time.ext?.position !== undefined;
+		
+		if (!isSign) {
+			const txt = convertText(cue.text || '');
+			const style = txt.style || defaultStyleName;
+			styleCounts[style] = (styleCounts[style] || 0) + 1;
+		}
+	}
+	
+	// Sort styles by frequency. Index 0 is the most used (Main).
+	const sortedStyles = Object.keys(styleCounts).sort((a, b) => styleCounts[b] - styleCounts[a]);
+	mainDialogueStyle = sortedStyles.length > 0 ? sortedStyles[0] : '';
+
+	// Parse CSS with the detected styles so they can be formatted properly
+	const parsedCSS = loadCSS(cssStr);
+	
+	if (mainDialogueStyle !== '' && parsedCSS[mainDialogueStyle]) {
+		const styleParts = parsedCSS[mainDialogueStyle].params.split(',');
+		mainDialogueFontSize = styleParts[1]; // Index 1 is Fontsize in ASS format
+	} else {
+		mainDialogueFontSize = fontSize.toString();
+	}
+	
+	return convert(parsedCSS, parsedVTT);
 }

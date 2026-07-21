@@ -1,6 +1,6 @@
 // build-in
 import path from 'path';
-import fs from 'fs';
+import fs from 'fs-extra';
 
 // package program
 import packageJson from './package.json';
@@ -112,10 +112,10 @@ export default class Crunchy implements ServiceClass {
 		} else if (argv.series && argv.series.match(/^[0-9A-Z]{9,}$/)) {
 			await this.refreshToken();
 			await this.logSeriesById(argv.series as string);
-			const selected = await this.downloadFromSeriesID(argv.series, { ...argv });
+			const selected = await this.downloadFromSeriesID(argv.series, { ...argv } as CrunchyDownloadOptions);
 			if (selected.isOk) {
 				for (const select of selected.value) {
-					if (!(await this.downloadEpisode(select, { ...argv, skipsubs: false }, true))) {
+					if (!(await this.downloadEpisode(select, { ...argv, skipsubs: false } as CrunchyDownloadOptions, true))) {
 						console.error(`Unable to download selected episode ${select.episodeNumber}`);
 						return false;
 					}
@@ -136,14 +136,33 @@ export default class Crunchy implements ServiceClass {
 			await this.logShowListRaw();
 		} else if (argv.s && argv.s.match(/^[0-9A-Z]{9,}$/)) {
 			await this.refreshToken();
-			if (argv.dubLang.length > 1) {
-				console.info('One show can only be downloaded with one dub. Use --srz instead.');
+			
+			// Fetch Season metadata to find the parent Series ID
+			const AuthHeaders = {
+				headers: {
+					Authorization: `Bearer ${this.token.access_token}`,
+					...api.crunchyDefHeader
+				}
+			};
+			const showInfoReq = await this.req.getData(`${api.content_cms}/seasons/${argv.s}?force_locale=&preferred_audio_language=ja-JP&locale=${this.locale}`, AuthHeaders);
+			
+			if (!showInfoReq.ok || !showInfoReq.res) {
+				console.error('Season Request FAILED!');
+				return false;
 			}
-			argv.dubLang = [argv.dubLang[0]];
-			const selected = await this.getSeasonById(argv.s, argv.numbers, argv.e, argv.but, argv.all);
+			const showInfo = await showInfoReq.res.json();
+			const seriesId = showInfo.data[0]?.series_id;
+
+			if (!seriesId) {
+				console.error('Could not determine Series ID for this Season.');
+				return false;
+			}
+
+			// Route through the multi-dub --srz logic, passing the Season ID to filter out the rest
+			const selected = await this.downloadFromSeriesID(seriesId, { ...argv, s: argv.s as string } as CrunchyDownloadOptions & CrunchyMultiDownload);
 			if (selected.isOk) {
 				for (const select of selected.value) {
-					if (!(await this.downloadEpisode(select, { ...argv, skipsubs: false }))) {
+					if (!(await this.downloadEpisode(select, { ...argv, skipsubs: false } as CrunchyDownloadOptions, true))) {
 						console.error(`Unable to download selected episode ${select.episodeNumber}`);
 						return false;
 					}
@@ -158,7 +177,7 @@ export default class Crunchy implements ServiceClass {
 			argv.dubLang = [argv.dubLang[0]];
 			const selected = await this.getObjectById(argv.e, false);
 			for (const select of selected as Partial<CrunchyEpMeta>[]) {
-				if (!(await this.downloadEpisode(select as CrunchyEpMeta, { ...argv, skipsubs: false }))) {
+				if (!(await this.downloadEpisode(select as CrunchyEpMeta, { ...argv, skipsubs: false } as CrunchyDownloadOptions))) {
 					console.error(`Unable to download selected episode ${select.episodeNumber}`);
 					return false;
 				}
@@ -172,7 +191,7 @@ export default class Crunchy implements ServiceClass {
 			argv.dubLang = [argv.dubLang[0]];
 			const selected = await this.getObjectById(argv.extid, false, true);
 			for (const select of selected as Partial<CrunchyEpMeta>[]) {
-				if (!(await this.downloadEpisode(select as CrunchyEpMeta, { ...argv, skipsubs: false }))) {
+				if (!(await this.downloadEpisode(select as CrunchyEpMeta, { ...argv, skipsubs: false } as CrunchyDownloadOptions))) {
 					console.error(`Unable to download selected episode ${select.episodeNumber}`);
 					return false;
 				}
@@ -226,6 +245,8 @@ export default class Crunchy implements ServiceClass {
 				...api.crunchyDefHeader
 			}
 		};
+		// seasons list
+		let episodeList = { total: 0, data: [], meta: {} } as CrunchyEpisodeList;
 		//get episode info
 		const reqEpsListOpts = [
 			api.cms_bucket,
@@ -248,7 +269,7 @@ export default class Crunchy implements ServiceClass {
 		}
 		//CrunchyEpisodeList
 		const episodeListAndroid = (await reqEpsList.res.json()) as CrunchyAndroidEpisodes;
-		const episodeList: CrunchyEpisodeList = {
+		episodeList = {
 			total: episodeListAndroid.total,
 			data: episodeListAndroid.items,
 			meta: {}
@@ -366,6 +387,26 @@ export default class Crunchy implements ServiceClass {
 		}
 		console.info('All required fonts downloaded!');
 	}
+
+	// private async productionToken() {
+	//   const tokenReq = await this.req.getData(api.bundlejs);
+
+	//   if (!tokenReq.ok || !tokenReq.res) {
+	//     console.error('Failed to get Production Token!');
+	//     return { isOk: false, reason: new Error('Failed to get Production Token') };
+	//   }
+
+	//   const rawjs = await tokenReq.res.text();
+
+	//   const tokens = rawjs.match(/prod="([\w-]+:[\w-]+)"/);
+
+	//   if (!tokens) {
+	//     console.error('Failed to find Production Token in js!');
+	//     return { isOk: false, reason: new Error('Failed to find Production Token in js') };
+	//   }
+
+	//   return Buffer.from(tokens[1], 'latin1').toString('base64');
+	// }
 
 	public async doAuth(data: AuthData): Promise<AuthResponse> {
 		const basic = atob(api.basic_auth_token);
@@ -1084,7 +1125,7 @@ export default class Crunchy implements ServiceClass {
 		const showInfo = await showInfoReq.res.json();
 		await this.logObject(showInfo.data[0], 0);
 
-		let episodeList: CrunchyEpisodeList;
+		let episodeList = { total: 0, data: [], meta: {} } as CrunchyEpisodeList;
 		//get episode info CMS
 		const reqEpsCMSListOpts = [
 			api.cms_bucket,
@@ -1587,21 +1628,39 @@ export default class Crunchy implements ServiceClass {
 			};
 
 			//Get Media GUID
+			let mediaId = mMeta.mediaId;
 			if (mMeta.versions) {
 				if (mMeta.lang) {
 					currentVersion = mMeta.versions.find((a) => a.audio_locale == mMeta.lang?.cr_locale);
 				} else if (options.dubLang.length == 1) {
-					const currentLang = langsData.languages.find((a) => a.code == options.dubLang[0]);
+					const currentLang = langsData.languages.find((a) => a.code == options.dubLang[0] || a.cr_locale == options.dubLang[0] || a.locale == options.dubLang[0]);
 					currentVersion = mMeta.versions.find((a) => a.audio_locale == currentLang?.cr_locale);
 				} else if (mMeta.versions.length == 1) {
 					currentVersion = mMeta.versions[0];
 				}
+				if (!currentVersion) {
+					const fallbackVersion = mMeta.versions.find((a) => a.original);
+					if (fallbackVersion) {
+						console.warn(`[WARN] Selected language not found. Falling back to original audio: ${fallbackVersion.audio_locale}`);
+						currentVersion = fallbackVersion;
+						
+						const fallbackLang = langsData.languages.find((a) => a.cr_locale == fallbackVersion.audio_locale);
+						if (fallbackLang) {
+							mMeta.lang = fallbackLang;
+						}
+					}
+				}
+
 				if (!currentVersion?.media_guid) {
 					console.error('Selected language not found in versions.');
 					continue;
 				}
 				isPrimary = currentVersion.original;
+				mediaId = currentVersion?.media_guid;
 			}
+
+			// If for whatever reason mediaId has a :, return the ID only
+			if (mediaId.includes(':')) mediaId = mediaId.split(':')[1];
 
 			const compiledChapters: string[] = [];
 			if (options.chapters) {
@@ -1648,22 +1707,23 @@ export default class Crunchy implements ServiceClass {
 
 					//Make a format more usable for the crunchy chapters
 					for (const chapter in chapterData) {
-						if (chapterData[chapter] && typeof chapterData[chapter] == 'object') {
+						if (typeof chapterData[chapter] == 'object') {
 							chapters.push(chapterData[chapter]);
 						}
 					}
 
-					if (chapters.length > 0) {
-						chapters.sort((a, b) => a.start - b.start);
+						if (chapters.length > 0) {
+						const validChapters = chapters.filter(c => c && typeof c.start === 'number' && typeof c.end === 'number');
+
+						validChapters.sort((a, b) => a.start - b.start);
+
 						//Check if chapters has an intro
-						//if (!(chapters.find(c => c.type === 'intro') || chapters.find(c => c.type === 'recap'))) {
-						if (!chapters.find((c) => c.type === 'intro')) {
+						if (!validChapters.find((c) => c.type === 'intro')) {
 							compiledChapters.push(`CHAPTER${compiledChapters.length / 2 + 1}=00:00:00.00`, `CHAPTER${compiledChapters.length / 2 + 1}NAME=Episode`);
 						}
 
 						//Loop through all the chapters
-						for (const chapter of chapters) {
-							if (typeof chapter.start == 'undefined' || typeof chapter.end == 'undefined') continue;
+						for (const chapter of validChapters) {
 							//Generate timestamps
 							const startTime = new Date(0),
 								endTime = new Date(0);
@@ -1672,7 +1732,7 @@ export default class Crunchy implements ServiceClass {
 							const startFormatted = startTime.toISOString().substring(11, 19) + '.00';
 							const endFormatted = endTime.toISOString().substring(11, 19) + '.00';
 							//Find the max start time from the chapters
-							const maxStart = Math.max(...chapters.map((obj) => obj.start).filter((start): start is number => start !== null && start !== undefined));
+							const maxStart = Math.max(...validChapters.map((obj) => obj.start).filter((start): start is number => start !== null && start !== undefined));
 							//We need the duration of the ep
 							let epDuration: number | undefined;
 							const epiMeta = await this.req.getData(
@@ -2056,19 +2116,13 @@ export default class Crunchy implements ServiceClass {
 					await this.refreshToken(true, true);
 					await this.req.getData(
 						`https://cr-play-service.prd.crunchyrollsvc.com/v1/token/${currentVersion ? currentVersion.guid : currentMediaId}/${videoStream.token}`,
-						{
-							...{ method: 'DELETE' },
-							...AuthHeaders
-						}
+						{ ...{ method: 'DELETE' }, ...AuthHeaders }
 					);
 				}
 				if (audioStream && videoStream?.token !== audioStream.token) {
 					await this.req.getData(
 						`https://cr-play-service.prd.crunchyrollsvc.com/v1/token/${currentVersion ? currentVersion.guid : currentMediaId}/${audioStream.token}`,
-						{
-							...{ method: 'DELETE' },
-							...AuthHeaders
-						}
+						{ ...{ method: 'DELETE' }, ...AuthHeaders }
 					);
 				}
 			}
@@ -2133,23 +2187,34 @@ export default class Crunchy implements ServiceClass {
 							return a.bandwidth - b.bandwidth;
 						});
 
-						let chosenVideoQuality = options.q === 0 ? videos.length : options.q;
+						const requestedQ = parseInt(String(options.q || 0), 10);
+						
+						let chosenVideoQuality = requestedQ === 0 ? videos.length : requestedQ;
 						if (chosenVideoQuality > videos.length) {
 							console.warn(
-								`The requested quality of ${options.q} is greater than the maximum ${videos.length}.\n[WARN] Therefor the maximum will be capped at ${videos.length}.`
+								`The requested quality of ${requestedQ} is greater than the maximum ${videos.length}.\n[WARN] Therefor the maximum will be capped at ${videos.length}.`
 							);
 							chosenVideoQuality = videos.length;
 						}
+						// Ensure index doesn't go below 1 (which maps to array index 0)
+						if (chosenVideoQuality < 1) chosenVideoQuality = 1;
 						chosenVideoQuality--;
 
-						let chosenAudioQuality = options.q === 0 ? audios.length : options.q;
+						let chosenAudioQuality = requestedQ === 0 ? audios.length : requestedQ;
 						if (chosenAudioQuality > audios.length) {
 							chosenAudioQuality = audios.length;
 						}
+						if (chosenAudioQuality < 1) chosenAudioQuality = 1;
 						chosenAudioQuality--;
 
 						const chosenVideoSegments = videos[chosenVideoQuality];
 						const chosenAudioSegments = audios[chosenAudioQuality];
+                        
+                        // Safety check for crash prevention
+						if (!chosenVideoSegments) {
+							console.error(`[ERROR] Failed to select video quality. Index: ${chosenVideoQuality}, Available: ${videos.length}`);
+							return undefined;
+						}
 
 						console.info(`Available Video Qualities:\n\t${videos.map((a, ind) => `[${ind + 1}] ${a.resolutionText}`).join('\n\t')}`);
 						console.info(`Available Audio Qualities:\n\t${audios.map((a, ind) => `[${ind + 1}] ${a.resolutionText}`).join('\n\t')}`);
@@ -2291,7 +2356,7 @@ export default class Crunchy implements ServiceClass {
 						let [audioDownloaded, videoDownloaded] = [false, false];
 
 						// When best selected video quality is already downloaded
-						if (dlVideoOnce && options.dlVideoOnce) {
+						if (dlVideoOnce) {
 							console.info('Already downloaded video, skipping video download...');
 						} else if (options.novids) {
 							console.info('Skipping video download...');
@@ -2568,7 +2633,7 @@ export default class Crunchy implements ServiceClass {
 							quality = plQuality.length;
 						}
 						// When best selected video quality is already downloaded
-						if (dlVideoOnce && options.dlVideoOnce) {
+						if (dlVideoOnce) {
 							// Select the lowest resolution with the same codecs
 							while (quality != 1 && plQuality[quality - 1].CODECS == plQuality[quality - 2].CODECS) {
 								quality--;
@@ -2627,16 +2692,7 @@ export default class Crunchy implements ServiceClass {
 								}
 
 								const chunkPageBody = await chunkPage.res.text();
-								// Init parser
-								const parser = new Parser();
-
-								// Parse M3U8
-								parser.push(chunkPageBody);
-								parser.end();
-
-								const chunkPlaylist = parser.manifest;
-								if (!chunkPlaylist) throw Error('Failed to parse M3U8');
-
+								const chunkPlaylist = m3u8(chunkPageBody);
 								const totalParts = chunkPlaylist.segments.length;
 								const mathParts = Math.ceil(totalParts / options.partsize);
 								const mathMsg = `(${mathParts}*${options.partsize})`;
@@ -2792,20 +2848,19 @@ export default class Crunchy implements ServiceClass {
 							});
 							if (subsAssReq.ok && subsAssReq.res) {
 								let sBody = await subsAssReq.res.text();
-
-								if (subsItem.format === 'vtt') {
+								if (subsItem.format == 'vtt') {
 									if (!options.noASSConv) {
 										const chosenFontSize = options.originalFontSize ? undefined : options.fontSize;
-										if (!options.originalFontSize) sBody = sBody.replace(/( font-size:.+?;)/g, '').replace(/(font-size:.+?;)/g, '');
+
+                                        // vtt2ass now handles font size overriding logic safely.
 										sBody = vtt2ass(undefined, chosenFontSize, sBody, '', undefined, options.fontName);
+										sxData.fonts = fontsData.assFonts(sBody) as Font[];
 										sxData.file = sxData.file.replace('.vtt', '.ass');
 									} else {
 										// Yeah, whatever
 										sxData.fonts = [];
 									}
-								}
-
-								if (!options.noASSConv || subsItem.format !== 'vtt') {
+								} else {
 									// Extract PlayRes
 									const mX = sBody.match(/^PlayResX:\s*(\d+)/m);
 									const mY = sBody.match(/^PlayResY:\s*(\d+)/m);
@@ -2929,14 +2984,9 @@ export default class Crunchy implements ServiceClass {
 											sBody = sBody.replace(/^(PlayResY:\s*\d+)/m, `$1\nLayoutResX: ${playResX}\nLayoutResY: ${playResY}`);
 										}
 
-										// ScaleBorderAndShadow Fix (True and doesn't exist)
+										// ScaleBorderAndShadow Fix
 										if (options.scaledBorderAndShadowFix && !sBody.includes('ScaledBorderAndShadow')) {
 											sBody = sBody.replace(/^(WrapStyle:.*)$/m, `$1\nScaledBorderAndShadow: ${options.scaledBorderAndShadow}`);
-										}
-
-										// ScaleBorderAndShadow Fix (True and exists)
-										if (options.scaledBorderAndShadowFix && sBody.includes('ScaledBorderAndShadow')) {
-											sBody = sBody.replace(/ScaledBorderAndShadow:\s*(yes|no)/, `ScaledBorderAndShadow: ${options.scaledBorderAndShadow}`);
 										}
 
 										// Fix VLC wrong parsing if URL not avaiable
@@ -3108,18 +3158,21 @@ export default class Crunchy implements ServiceClass {
 		const bin = Merger.checkMerger(this.cfg.bin, options.mp4, options.forceMuxer);
 		// collect fonts info
 		// mergers
+		let isMuxed = false;
 		if (options.syncTiming) {
 			await merger.createDelays();
 		}
 		if (bin.MKVmerge) {
 			await merger.merge('mkvmerge', bin.MKVmerge);
+			isMuxed = true;
 		} else if (bin.FFmpeg) {
 			await merger.merge('ffmpeg', bin.FFmpeg);
+			isMuxed = true;
 		} else {
 			console.info('\nDone!\n');
 			return;
 		}
-		if (!options.nocleanup) merger.cleanUp();
+		if (isMuxed && !options.nocleanup) merger.cleanUp();
 	}
 
 	public async listSeriesID(
@@ -3346,7 +3399,7 @@ export default class Crunchy implements ServiceClass {
 					],
 					seriesTitle: itemE.items.find((a) => !a.series_title.match(/\(\w+ Dub\)/))?.series_title ?? itemE.items[0].series_title.replace(/\(\w+ Dub\)/g, '').trimEnd(),
 					seasonTitle: itemE.items.find((a) => !a.season_title.match(/\(\w+ Dub\)/))?.season_title ?? itemE.items[0].season_title.replace(/\(\w+ Dub\)/g, '').trimEnd(),
-					episodeNumber: epNum,
+					episodeNumber: item.episode,
 					episodeTitle: item.title,
 					seasonID: item.season_id,
 					season: item.season_number,
@@ -3476,7 +3529,8 @@ export default class Crunchy implements ServiceClass {
 		let episodeList = { total: 0, data: [], meta: {} } as CrunchyEpisodeList;
 		//get episode info
 		for (const s of showInfo.data) {
-			const id = s.id;
+			const original_id = s.versions?.find((v: { original: boolean }) => v.original)?.guid;
+			const id = original_id ? original_id : s.id;
 
 			//get episode info CMS
 			const reqEpsCMSListOpts = [
